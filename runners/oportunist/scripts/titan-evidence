@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""Bounded HTTPS evidence client; credentials are short-lived GitHub job identity."""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import ssl
+import stat
+import sys
+import tempfile
+import urllib.parse
+import urllib.request
+
+MAX_BYTES = 512 * 1024 * 1024
+KEY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/[0-9a-f]{40}/[1-9][0-9]*/[1-9][0-9]*/[A-Za-z0-9_-]+/(?:required-ci|full-certification|live-provider|runtime-sbom)\.tar\.gz")
+
+
+class ClientError(Exception):
+    pass
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        raise ClientError("redirect refused")
+
+
+def https_url(value):
+    parsed = urllib.parse.urlsplit(value)
+    if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+        raise ClientError('invalid URL')
+    return parsed
+
+
+def configuration():
+    base = os.environ.get('TITAN_EVIDENCE_BASE_URL', '').rstrip('/')
+    parsed = https_url(base)
+    if parsed.query or parsed.path != '/downloads':
+        raise ClientError('download prefix must be /downloads')
+    audience = os.environ.get('TITAN_EVIDENCE_AUDIENCE', '')
+    if not audience or len(audience) > 255:
+        raise ClientError('audience required')
+    return base, f'https://{parsed.netloc}', audience
+
+
+def opener():
+    return urllib.request.build_opener(NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+
+
+def read_json(response):
+    raw = response.read(65537)
+    if len(raw) > 65536:
+        raise ClientError('response too large')
+    return json.loads(raw)
+
+
+def identity(http, audience):
+    url = os.environ.get('ACTIONS_ID_TOKEN_REQUEST_URL', '')
+    parsed = https_url(url)
+    secret = os.environ.get('ACTIONS_ID_TOKEN_REQUEST_TOKEN', '')
+    if not secret:
+        raise ClientError('identity unavailable')
+    query = [(k, v) for k, v in urllib.parse.parse_qsl(parsed.query) if k != 'audience']
+    query.append(('audience', audience))
+    target = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urllib.parse.urlencode(query), ''))
+    request = urllib.request.Request(target, headers={'Authorization': f'Bearer {secret}'})
+    with http.open(request, timeout=30) as response:
+        payload = read_json(response)
+    token = payload.get('value') if isinstance(payload, dict) else None
+    if not isinstance(token, str) or not token or len(token) > 32768:
+        raise ClientError('invalid identity response')
+    return token
+
+
+def put(args, http, origin, base, token):
+    path = Path(args.file)
+    if not path.is_absolute():
+        raise ClientError('absolute input required')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, 'rb') as source, tempfile.TemporaryFile() as snapshot:
+        before = os.fstat(source.fileno())
+        if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_BYTES:
+            raise ClientError('invalid input')
+        total = 0
+        digest = hashlib.sha256()
+        while chunk := source.read(1024 * 1024):
+            total += len(chunk)
+            if total > MAX_BYTES:
+                raise ClientError('input too large')
+            snapshot.write(chunk)
+            digest.update(chunk)
+        after = os.fstat(source.fileno())
+        if (total != before.st_size or (before.st_mtime_ns, before.st_ctime_ns) != (after.st_mtime_ns, after.st_ctime_ns)):
+            raise ClientError('input changed')
+        snapshot.seek(0)
+        request = urllib.request.Request(origin + '/v1/objects/' + args.key, data=snapshot, method='PUT', headers={
+            'Authorization': f'Bearer {token}', 'Content-Type': 'application/gzip',
+            'Content-Length': str(total), 'X-Evidence-Retention-Days': str(args.retention_days)})
+        with http.open(request, timeout=30) as response:
+            receipt = read_json(response)
+    expected = {'version': 1, 'key': args.key, 'sha256': digest.hexdigest(), 'size': total, 'url': base + '/' + args.key}
+    if receipt != expected:
+        raise ClientError('receipt mismatch')
+    return receipt
+
+
+def get(args, http, origin, token):
+    path = Path(args.output)
+    if not path.is_absolute():
+        raise ClientError('absolute output required')
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    owned = os.fstat(fd)
+    try:
+        with os.fdopen(fd, 'wb') as output:
+            request = urllib.request.Request(origin + '/v1/objects/' + args.key, headers={'Authorization': f'Bearer {token}'})
+            with http.open(request, timeout=30) as response:
+                length = int(response.headers['Content-Length'])
+                if not 0 <= length <= MAX_BYTES:
+                    raise ClientError('invalid length')
+                total = 0
+                while chunk := response.read(1024 * 1024):
+                    total += len(chunk)
+                    if total > length:
+                        raise ClientError('invalid download')
+                    output.write(chunk)
+                if total != length:
+                    raise ClientError('partial download')
+            output.flush()
+            os.fsync(output.fileno())
+    except BaseException:
+        try:
+            current = path.lstat()
+            if (current.st_dev, current.st_ino) == (owned.st_dev, owned.st_ino):
+                path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check-config', action='store_true')
+    sub = parser.add_subparsers(dest='operation')
+    upload = sub.add_parser('put')
+    upload.add_argument('--file', required=True)
+    upload.add_argument('--key', required=True)
+    upload.add_argument('--retention-days', required=True, type=int)
+    download = sub.add_parser('get')
+    download.add_argument('--key', required=True)
+    download.add_argument('--output', required=True)
+    args = parser.parse_args()
+    def timeout(*_):
+        raise ClientError('deadline exceeded')
+    signal.signal(signal.SIGALRM, timeout)
+    signal.setitimer(signal.ITIMER_REAL, 180)
+    try:
+        base, origin, audience = configuration()
+        if args.check_config:
+            return 0
+        if not args.operation or not KEY_RE.fullmatch(args.key) or any(p in {'.', '..'} for p in args.key.split('/')):
+            raise ClientError('invalid operation/key')
+        http = opener()
+        token = identity(http, audience)
+        if args.operation == 'put':
+            print(json.dumps(put(args, http, origin, base, token), separators=(',', ':')))
+        else:
+            get(args, http, origin, token)
+    except Exception:
+        print('EVIDENCE_CLIENT_FAILED', file=sys.stderr)
+        return 1
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

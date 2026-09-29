@@ -21,3 +21,5 @@ python3 -m pytest tests/test_runner_contract.py -v \
 python3 -m pytest tests/test_codex_contract.py -v
 python3 -m pytest tests/test_publish_titan_contract.py -v
 python3 tests/check_compose_contract.py
+
+python3 -m pytest tests/test_evidence*.py -q

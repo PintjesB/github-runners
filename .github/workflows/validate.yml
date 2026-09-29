@@ -38,3 +38,34 @@ jobs:
       - name: Run profile contract
         working-directory: runners/${{ matrix.profile }}
         run: ./ci-contract.sh
+
+  native-images:
+    name: Probe ${{ matrix.profile }} ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [titan, oportunist]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Build native runner
+        run: docker build -t runner-under-test runners/${{ matrix.profile }}
+      - name: Probe native runner
+        run: |
+          docker run --rm --entrypoint /usr/local/bin/probe \
+            --security-opt no-new-privileges:true \
+            --add-host host.docker.internal:host-gateway --shm-size 2gb \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e HOME=/tmp -e EXPECTED_ARCH=${{ matrix.arch }} \
+            runner-under-test --skip-network
+      - name: Build evidence service
+        if: matrix.profile == 'titan'
+        run: docker build -t evidence-under-test runners/titan/evidence

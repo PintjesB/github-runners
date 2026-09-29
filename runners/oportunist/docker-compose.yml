@@ -9,6 +9,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
+      TITAN_EVIDENCE_BASE_URL: ${TITAN_EVIDENCE_BASE_URL:-}
+      TITAN_EVIDENCE_AUDIENCE: ${TITAN_EVIDENCE_AUDIENCE:-}
       REPO_URL: ${OPORTUNIST_RUNNER_REPO_URL:-https://github.com/PintjesB/oportunist}
       RUNNER_NAME: ${OPORTUNIST_RUNNER_NAME:-oportunist-ci}
       RUNNER_LABELS: ${OPORTUNIST_RUNNER_LABELS:-oportunist-ci,codex}

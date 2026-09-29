@@ -1,0 +1,42 @@
+# Separate storage host: NEVER deploy on a Docker daemon accessible by CI jobs.
+services:
+  evidence:
+    build: .
+    image: ${EVIDENCE_IMAGE:?Set an operator-built immutable image digest}
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2
+    ports:
+      - "127.0.0.1:${EVIDENCE_PORT:-8098}:8080"
+    environment:
+      EVIDENCE_LISTEN: "0.0.0.0:8080"
+      EVIDENCE_OIDC_AUDIENCE: ${EVIDENCE_OIDC_AUDIENCE:?Set the exact OIDC audience}
+      EVIDENCE_DOWNLOAD_BASE_URL: ${EVIDENCE_DOWNLOAD_BASE_URL:?HTTPS authenticated /downloads URL required}
+    volumes:
+      - type: bind
+        source: ${EVIDENCE_STORAGE_PATH:?Pre-provision the durable storage mount and marker}
+        target: /srv/evidence
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${EVIDENCE_POLICY_PATH:?Policy file required}
+        target: /run/config/evidence-policy.json
+        read_only: true
+        bind:
+          create_host_path: false
+    secrets: [github_api_token, proxy_secret]
+    healthcheck:
+      test: [CMD, python, /opt/evidence/server.py, --check]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+secrets:
+  github_api_token:
+    file: ${EVIDENCE_GITHUB_TOKEN_PATH:?Service-only read-only GitHub metadata credential}
+  proxy_secret:
+    file: ${EVIDENCE_PROXY_SECRET_PATH:?Proxy-only authentication header secret}

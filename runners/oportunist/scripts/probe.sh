@@ -6,6 +6,8 @@ set -euo pipefail
 ok() { printf '  ok   %s\n' "$*"; }
 fail() { printf '  FAIL %s\n' "$*" >&2; exit 1; }
 
+titan-evidence --help >/dev/null
+
 for binary in docker gh git bash node npm python3 codex; do
     command -v "$binary" >/dev/null 2>&1 || fail "missing binary: $binary"
     ok "binary: $binary"

@@ -10,6 +10,8 @@ services:
       - "host.docker.internal:host-gateway"
     shm_size: "2gb"
     environment:
+      TITAN_EVIDENCE_BASE_URL: ${TITAN_EVIDENCE_BASE_URL:-}
+      TITAN_EVIDENCE_AUDIENCE: ${TITAN_EVIDENCE_AUDIENCE:-}
       REPO_URL: ${TITAN_RUNNER_REPO_URL:?TITAN_RUNNER_REPO_URL is required}
       RUNNER_NAME: ${TITAN_RUNNER_NAME:-titan-ci}
       RUNNER_LABELS: ${TITAN_RUNNER_LABELS:-titan-ci}

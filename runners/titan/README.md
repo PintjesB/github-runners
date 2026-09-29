@@ -267,3 +267,11 @@ interface.
 * [PintjesB/titan-stocks](https://github.com/PintjesB/titan-stocks)
   &mdash; the private consumer application; every workflow targets
   the `[self-hosted, linux, titan-ci]` label group.
+
+## Self-hosted CI evidence storage
+
+Both runner profiles install the versioned `titan-evidence` client. See the
+[service runbook](evidence/README.md) and [consumer contract](docs/evidence-storage-contract.md).
+The service requires separately provisioned durable storage, HTTPS and human
+authentication before [Titan Stocks PR #213](https://github.com/PintjesB/titan-stocks/pull/213)
+can pass its required evidence gates. Image installation alone does not deploy storage.

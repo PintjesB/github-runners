@@ -57,6 +57,9 @@ RUN groupadd --system --gid 1001 runner \
 RUN npm install -g "@openai/codex@${CODEX_VERSION}" \
  && codex --version
 
+COPY --chown=root:root scripts/titan-evidence /usr/local/bin/titan-evidence
+RUN chmod 0755 /usr/local/bin/titan-evidence
+
 COPY --chown=root:root scripts/fetch-runner.sh /usr/local/bin/fetch-runner
 RUN chmod 0755 /usr/local/bin/fetch-runner \
  && TARGETARCH="${TARGETARCH}" /usr/local/bin/fetch-runner \
