@@ -267,3 +267,12 @@ interface.
 * [PintjesB/titan-stocks](https://github.com/PintjesB/titan-stocks)
   &mdash; the private consumer application; every workflow targets
   the `[self-hosted, linux, titan-ci]` label group.
+
+## Planned self-hosted CI evidence storage
+
+The [implementation plan](docs/evidence-storage-plan.md) and
+[versioned consumer contract](docs/evidence-storage-contract.md) describe the
+runner changes needed by [Titan Stocks PR #213](https://github.com/PintjesB/titan-stocks/pull/213).
+This is planned work, not an installed capability: storage, authenticated retrieval,
+run-scoped identity, persistence and restore checks must be implemented and verified
+before the consumer workflow can pass. Both native runner architectures remain supported.
