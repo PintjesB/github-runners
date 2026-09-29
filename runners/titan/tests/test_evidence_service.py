@@ -173,7 +173,8 @@ def test_retry_rejects_oversized_existing_object(service):
 def test_metadata_read_is_bounded(service):
     service.put(key(), b'abc', 14, 'jwt')
     path = service.object_path(key())
-    path.with_name(path.name + '.metadata.json').write_text(' ' * 65537)
+    meta = path.with_name(path.name + '.metadata.json')
+    meta.write_text(' ' * 65537 + meta.read_text())
     with pytest.raises(service.error_type) as error:
         service.get(key(), 'jwt')
     assert error.value.code == 'METADATA_CORRUPT'
