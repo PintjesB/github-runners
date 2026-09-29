@@ -59,7 +59,7 @@ jobs:
           fi
 
           latest_digest="$(docker buildx imagetools inspect "${IMAGE}:latest" \
-            | awk '$1 == "Digest:" {print $2; exit}')"
+            | awk '$1 == "Digest:" && !found {print $2; found=1}')"
           if [[ ! "$latest_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "::error::invalid latest digest: $latest_digest"
             exit 1
@@ -149,7 +149,7 @@ jobs:
           set -euo pipefail
 
           existing="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" 2>/dev/null \
-            | awk '$1 == "Digest:" {print $2; exit}' || true)"
+            | awk '$1 == "Digest:" && !found {print $2; found=1}' || true)"
 
           if [ -n "$existing" ]; then
             if [ "$existing" != "$EXPECTED_DIGEST" ]; then
@@ -164,9 +164,9 @@ jobs:
           fi
 
           version_digest="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" \
-            | awk '$1 == "Digest:" {print $2; exit}')"
+            | awk '$1 == "Digest:" && !found {print $2; found=1}')"
           latest_digest="$(docker buildx imagetools inspect "${IMAGE}:latest" \
-            | awk '$1 == "Digest:" {print $2; exit}')"
+            | awk '$1 == "Digest:" && !found {print $2; found=1}')"
 
           if [ "$version_digest" != "$EXPECTED_DIGEST" ]; then
             echo "::error::${IMAGE}:${VERSION} resolved to $version_digest, expected $EXPECTED_DIGEST"

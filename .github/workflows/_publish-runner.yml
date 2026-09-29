@@ -89,7 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           ref="${IMAGE}:candidate-${GITHUB_SHA}-${TAG_SUFFIX}"
-          digest="$(docker buildx imagetools inspect "$ref" | awk '$1 == "Digest:" {print $2; exit}')"
+          digest="$(docker buildx imagetools inspect "$ref" | awk '$1 == "Digest:" && !found {print $2; found=1}')"
           if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "::error::invalid candidate digest: $digest"
             exit 1
@@ -176,7 +176,7 @@ jobs:
               output="$(docker buildx imagetools inspect "${IMAGE}@${digest}" 2>&1)"
               rc=$?
               set -e
-              media_type="$(printf '%s\n' "$output" | awk '$1 == "MediaType:" {print $2; exit}')"
+              media_type="$(printf '%s\n' "$output" | awk '$1 == "MediaType:" && !found {print $2; found=1}')"
               if [ "$rc" -eq 0 ] && [ -n "$media_type" ]; then
                 break
               fi
@@ -227,7 +227,7 @@ jobs:
 
           merged=""
           for attempt in 1 2 3 4 5 6; do
-            merged="$(docker buildx imagetools inspect "${IMAGE}:${merged_tag}" 2>/dev/null | awk '$1 == "Digest:" {print $2; exit}' || true)"
+            merged="$(docker buildx imagetools inspect "${IMAGE}:${merged_tag}" 2>/dev/null | awk '$1 == "Digest:" && !found {print $2; found=1}' || true)"
             if [[ "$merged" =~ ^sha256:[0-9a-f]{64}$ ]]; then
               break
             fi
@@ -394,7 +394,7 @@ jobs:
           docker buildx imagetools create \
             --tag "${IMAGE}:latest" \
             "${IMAGE}@${merged}"
-          latest="$(docker buildx imagetools inspect "${IMAGE}:latest" | awk '$1 == "Digest:" {print $2; exit}')"
+          latest="$(docker buildx imagetools inspect "${IMAGE}:latest" | awk '$1 == "Digest:" && !found {print $2; found=1}')"
           if [ "$latest" != "$merged" ]; then
             echo "::error::latest digest $latest differs from merged $merged"
             exit 1

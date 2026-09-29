@@ -153,3 +153,23 @@ def test_semver_tagging_is_idempotent_and_collision_safe() -> None:
     assert "version collision:" in text
     assert '"${IMAGE}@${EXPECTED_DIGEST}"' in text
     assert "latest moved during SemVer tagging" in text
+
+
+def test_digest_extractors_drain_large_inspect_output(tmp_path) -> None:
+    """A producer can fail with EPIPE if awk exits after the first header."""
+    import re
+    import subprocess
+    import sys
+
+    producer = tmp_path / 'inspect.py'
+    producer.write_text('import os\nos.write(1, b"Digest: sha256:first\\n")\n'
+                        'for _ in range(256): os.write(1, b"x" * 65536 + b"\\n")\n'
+                        'os.write(1, b"Digest: sha256:child\\n")\n')
+    programs = set(re.findall(r"awk '([^']*Digest:[^']*)'", REUSABLE.read_text() + SEMVER.read_text()))
+    assert programs
+    for program in programs:
+        result = subprocess.run(['bash', '-o', 'pipefail', '-c',
+                                 '"$1" "$2" | awk "$3"', 'extract', sys.executable,
+                                 str(producer), program], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == 'sha256:first\n'
