@@ -219,6 +219,7 @@ probe_network() {
 }
 
 echo "titan-runner probe (native architecture: $EXPECTED_ARCH)"
+titan-evidence --help >/dev/null
 probe_docker
 probe_compose
 probe_buildx

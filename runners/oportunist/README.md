@@ -56,3 +56,10 @@ runs-on: [self-hosted, linux, oportunist-ci]
 ```
 
 The additional `codex` label allows Codex-specific jobs to select this runner explicitly if desired.
+
+## CI evidence client
+
+Version 1.1.0 installs `titan-evidence`, identical to the Titan client. Optional
+`TITAN_EVIDENCE_BASE_URL` and `TITAN_EVIDENCE_AUDIENCE` settings carry no credentials.
+See the [storage runbook](../titan/evidence/README.md); server policy denies this
+repository until its consuming workflows are explicitly configured.

@@ -13,3 +13,7 @@
 #              contract tests can assert on the workflow structure.
 pytest==9.1.1
 PyYAML==6.0.3
+
+# Real TLS/JWT fixtures for evidence client and service.
+PyJWT[crypto]==2.15.1
+cryptography==50.0.0

@@ -1,0 +1,47 @@
+{
+  "repositories": {
+    "PintjesB/titan-stocks": {
+      "repository_id": "1207120491",
+      "owner_id": "20966602",
+      "trusted_runner_label": "titan-ci",
+      "workflows": {
+        ".github/workflows/app-ci.yml": {
+          "required-ci": {
+            "retention_days": 14,
+            "jobs": {
+              "required-ci": "Required CI"
+            }
+          },
+          "runtime-sbom": {
+            "retention_days": 90,
+            "jobs": {
+              "publish-runtime": "Publish verified runtime image"
+            }
+          }
+        },
+        ".github/workflows/full-certification.yml": {
+          "full-certification": {
+            "retention_days": 30,
+            "jobs": {
+              "full-certification": "Full weekly certification"
+            }
+          }
+        },
+        ".github/workflows/live-provider-tests.yml": {
+          "live-provider": {
+            "retention_days": 30,
+            "jobs": {
+              "providers": "Two opt-in live provider tests"
+            }
+          }
+        }
+      }
+    },
+    "PintjesB/oportunist": {
+      "repository_id": "1199457754",
+      "owner_id": "20966602",
+      "trusted_runner_label": "oportunist-ci",
+      "workflows": {}
+    }
+  }
+}

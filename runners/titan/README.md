@@ -268,11 +268,10 @@ interface.
   &mdash; the private consumer application; every workflow targets
   the `[self-hosted, linux, titan-ci]` label group.
 
-## Planned self-hosted CI evidence storage
+## Self-hosted CI evidence storage
 
-The [implementation plan](docs/evidence-storage-plan.md) and
-[versioned consumer contract](docs/evidence-storage-contract.md) describe the
-runner changes needed by [Titan Stocks PR #213](https://github.com/PintjesB/titan-stocks/pull/213).
-This is planned work, not an installed capability: storage, authenticated retrieval,
-run-scoped identity, persistence and restore checks must be implemented and verified
-before the consumer workflow can pass. Both native runner architectures remain supported.
+Both runner profiles install the versioned `titan-evidence` client. See the
+[service runbook](evidence/README.md) and [consumer contract](docs/evidence-storage-contract.md).
+The service requires separately provisioned durable storage, HTTPS and human
+authentication before [Titan Stocks PR #213](https://github.com/PintjesB/titan-stocks/pull/213)
+can pass its required evidence gates. Image installation alone does not deploy storage.

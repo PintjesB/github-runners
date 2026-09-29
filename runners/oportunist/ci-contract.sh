@@ -35,3 +35,7 @@ grep -q 'needs: publish' "$wrapper"
 grep -q 'version_file="runners/${PROFILE}/VERSION"' "$semver"
 grep -q 'gh api --paginate' "$semver"
 grep -q 'version collision:' "$semver"
+
+python3 -m py_compile scripts/titan-evidence
+scripts/titan-evidence --help >/dev/null
+cmp scripts/titan-evidence ../titan/scripts/titan-evidence

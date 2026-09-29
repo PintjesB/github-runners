@@ -120,4 +120,8 @@ check "node 24 on PATH" check_node
 check "python 3.12+ on PATH" check_python
 check "host.docker.internal alias" check_host_gateway
 check "playwright chromium cache" check_playwright_cache
+check "evidence client installed" /usr/local/bin/titan-evidence --help
+if [ -n "${TITAN_EVIDENCE_BASE_URL:-}${TITAN_EVIDENCE_AUDIENCE:-}" ]; then
+    check "evidence routing configuration" /usr/local/bin/titan-evidence --check-config
+fi
 exit 0
