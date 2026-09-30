@@ -43,6 +43,8 @@ jobs:
     name: Build and probe ${{ inputs.profile }} ${{ matrix.platform }}
     needs: contract
     runs-on: ${{ matrix.runner }}
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
     strategy:
       fail-fast: false
       matrix:
@@ -119,6 +121,7 @@ jobs:
           name: ${{ inputs.profile }}-candidate-${{ matrix.tag_suffix }}
           path: ${{ runner.temp }}/candidate-digest.txt
           if-no-files-found: error
+          retention-days: 1
 
   merge:
     name: Merge and validate ${{ inputs.profile }} manifests
@@ -285,6 +288,7 @@ jobs:
           name: ${{ inputs.profile }}-merged-digest
           path: ${{ runner.temp }}/merged-digest.txt
           if-no-files-found: error
+          retention-days: 1
 
   verify:
     name: Verify ${{ inputs.profile }} merged ${{ matrix.platform }}
