@@ -24,5 +24,5 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Validate against the Renovate version bundled in CE 15.6.0
-        run: npx --yes --package renovate@44.103.0 -- renovate-config-validator --strict
+      - name: Validate Renovate configuration
+        run: npx --yes --package renovate -- renovate-config-validator --strict
