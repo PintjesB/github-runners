@@ -121,11 +121,23 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: read
+    env:
+      CACHE_IMAGE: ${{ matrix.profile == 'titan' && 'ghcr.io/pintjesb/titan-stocks-runner' || 'ghcr.io/pintjesb/oportunist-runner' }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
+
+      - name: Log in to GHCR for shared build cache
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
@@ -139,7 +151,9 @@ jobs:
           tags: runner-under-test:latest
           provenance: false
           sbom: false
-          cache-from: type=gha,scope=runner-${{ matrix.profile }}-${{ matrix.arch }}
+          cache-from: |
+            type=gha,scope=runner-${{ matrix.profile }}-${{ matrix.arch }}
+            type=registry,ref=${{ env.CACHE_IMAGE }}:buildcache-${{ matrix.arch }}
           cache-to: type=gha,mode=min,scope=runner-${{ matrix.profile }}-${{ matrix.arch }}
 
       - name: Probe native runner
