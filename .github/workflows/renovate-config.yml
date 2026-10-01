@@ -1,0 +1,28 @@
+name: renovate-config
+
+on:
+  pull_request:
+    paths:
+      - "renovate.json"
+  push:
+    branches:
+      - main
+    paths:
+      - "renovate.json"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Renovate configuration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+
+      - name: Validate against the Renovate version bundled in CE 15.6.0
+        run: npx --yes --package renovate@44.103.0 -- renovate-config-validator --strict
