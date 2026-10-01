@@ -1,3 +1,89 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json"
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":enableVulnerabilityAlertsWithLabel('security')",
+    ":rebaseStalePrs",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/Brussels",
+  "labels": [
+    "renovate"
+  ],
+  "platformAutomerge": false,
+  "automergeType": "pr",
+  "ignoreTests": false,
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/bower_components/**"
+  ],
+  "packageRules": [
+    {
+      "description": "Automerge Python patch updates only after runner validation succeeds",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Automerge the Titan probe npm patch updates only after native image validation",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Keep larger npm changes manual",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Runner base image changes require manual review",
+      "matchDatasources": [
+        "docker"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Workflow dependency changes affect privileged publishing and require manual review",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Baked runner tooling requires manual review even for routine upgrades",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "automerge": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the OpenAI Codex CLI baked into the Oportunist runner",
+      "managerFilePatterns": [
+        "/^runners\\/oportunist\\/Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG CODEX_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "@openai/codex",
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "semver-coerced"
+    }
+  ]
 }
