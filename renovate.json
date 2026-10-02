@@ -30,6 +30,18 @@
       "automerge": true
     },
     {
+      "description": "Require Dependency Dashboard approval for stateful database and datastore images",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "/^(?:[^/]+\\/)*(?:postgres|postgresql|redis|valkey|mariadb|mysql|mongo|mongodb|elasticsearch|opensearch|influxdb|clickhouse|cockroachdb|couchdb|timescaledb|postgres-documentdb)$/",
+        "mcr.microsoft.com/mssql/server"
+      ],
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
       "description": "Keep major dependency updates manual",
       "matchUpdateTypes": [
         "major"
