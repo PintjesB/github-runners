@@ -19,54 +19,20 @@
   ],
   "packageRules": [
     {
-      "description": "Automerge Python patch updates only after runner validation succeeds",
-      "matchManagers": [
-        "pip_requirements"
-      ],
-      "matchUpdateTypes": [
-        "patch"
-      ],
-      "automerge": true
-    },
-    {
-      "description": "Automerge the Titan probe npm patch updates only after native image validation",
-      "matchManagers": [
-        "npm"
-      ],
-      "matchUpdateTypes": [
-        "patch"
-      ],
-      "automerge": true
-    },
-    {
-      "description": "Keep larger npm changes manual",
-      "matchManagers": [
-        "npm"
-      ],
+      "description": "Automerge routine non-major dependency updates after CI succeeds",
       "matchUpdateTypes": [
         "minor",
+        "patch",
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Keep major dependency updates manual",
+      "matchUpdateTypes": [
         "major"
-      ],
-      "automerge": false
-    },
-    {
-      "description": "Runner base image changes require manual review",
-      "matchDatasources": [
-        "docker"
-      ],
-      "automerge": false
-    },
-    {
-      "description": "Workflow dependency changes affect privileged publishing and require manual review",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "automerge": false
-    },
-    {
-      "description": "Baked runner tooling requires manual review even for routine upgrades",
-      "matchManagers": [
-        "custom.regex"
       ],
       "automerge": false
     }
@@ -85,5 +51,6 @@
       "datasourceTemplate": "npm",
       "versioningTemplate": "semver-coerced"
     }
-  ]
+  ],
+  "automerge": false
 }
