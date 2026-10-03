@@ -44,9 +44,9 @@
 #      all three values together; the lifecycle scripts verify the
 #      architecture-specific digest before any job is allowed to
 #      register against GitHub.
-#   3. ``PLAYWRIGHT_VERSION`` is consumed by the image's capability
-#      probe only. Containerized Playwright application installs do
-#      not need to match.
+#   3. The capability probe's Playwright version is owned by
+#      ``probe/package.json`` and its lockfile so Renovate updates
+#      one canonical dependency source.
 #   4. ``CODEX_VERSION`` pins the Codex CLI used by autonomous
 #      workflows. Refresh it deliberately so image publication and
 #      the native capability probe validate the exact CLI version.
@@ -64,7 +64,6 @@ ARG TARGETARCH
 ARG RUNNER_VERSION=2.336.0
 ARG RUNNER_SHA256_ARM64=58b758e420b87093fbd4bfddd368074960053e2f1388f01848c82624b90f27d1
 ARG RUNNER_SHA256_X64=04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d
-ARG PLAYWRIGHT_VERSION=1.61.1
 ARG CODEX_VERSION=0.147.0
 
 ENV LANG=C.UTF-8 \
@@ -72,12 +71,11 @@ ENV LANG=C.UTF-8 \
     RUNNER_VERSION=${RUNNER_VERSION} \
     RUNNER_SHA256_ARM64=${RUNNER_SHA256_ARM64} \
     RUNNER_SHA256_X64=${RUNNER_SHA256_X64} \
-    PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION} \
     CODEX_VERSION=${CODEX_VERSION} \
     CODEX_HOME=/home/runner/.codex \
     # The image installs Node via NodeSource; declaring the major
     # here keeps the Docker layer cache stable across rebuilds that
-    # only refresh the runner or Playwright versions.
+    # only refresh the runner or probe dependencies.
     NODE_MAJOR=24 \
     # The runner binaries live in this image-owned directory. The
     # container entrypoint does not need to redownload them.
