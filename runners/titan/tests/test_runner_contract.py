@@ -1686,7 +1686,7 @@ def test_publish_workflow_attests_before_promotion() -> None:
     import yaml
 
     text = _read(PUBLISH_WORKFLOW)
-    assert re.search(r"actions/attest@[0-9a-f]{40}", text), (
+    assert re.search(r"actions/attest-build-provenance@[0-9a-f]{40}", text), (
         "publish.yml must pin the attestation action to an immutable commit"
     )
     with PUBLISH_WORKFLOW.open(encoding="utf-8") as fh:
@@ -1731,7 +1731,7 @@ def test_publish_workflow_attests_before_promotion() -> None:
 def test_publish_workflow_attestation_permissions() -> None:
     """The attestation job MUST declare the ``id-token``,
     ``attestations``, and ``artifact-metadata`` write permissions
-    required by ``actions/attest`` for the keyless OIDC signing
+    required by ``actions/attest-build-provenance`` for the keyless OIDC signing
     flow and for ``:latest`` tag management.
 
     The promote job MUST declare ``artifact-metadata: write`` so
