@@ -1,0 +1,10 @@
+{
+  "name": "titan-probe",
+  "version": "1.0.0",
+  "description": "Deterministic Playwright dependency tree for the titan-runner probe",
+  "private": true,
+  "license": "UNLICENSED",
+  "dependencies": {
+    "playwright-core": "1.61.1"
+  }
+}
