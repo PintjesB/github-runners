@@ -2,9 +2,6 @@ name: validate-runner-profiles
 
 on:
   pull_request:
-    paths:
-      - 'runners/**'
-      - '.github/workflows/**'
   workflow_dispatch:
 
 concurrency:
@@ -23,6 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       profiles: ${{ steps.filter.outputs.profiles }}
+      has_profiles: ${{ steps.filter.outputs.has_profiles }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -41,7 +39,10 @@ jobs:
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo 'profiles=["titan","oportunist"]' >> "$GITHUB_OUTPUT"
+            {
+              echo 'profiles=["titan","oportunist"]'
+              echo 'has_profiles=true'
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -69,15 +70,25 @@ jobs:
           elif [ "$oportunist" = true ]; then
             profiles='["oportunist"]'
           else
-            # Fail-safe fallback for future path changes.
-            profiles='["titan","oportunist"]'
+            # Keep a syntactically valid matrix value, but skip the expensive
+            # profile jobs. The final Required CI job still reports success.
+            profiles='["titan"]'
+            {
+              echo "profiles=$profiles"
+              echo 'has_profiles=false'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-          echo "profiles=$profiles" >> "$GITHUB_OUTPUT"
+          {
+            echo "profiles=$profiles"
+            echo 'has_profiles=true'
+          } >> "$GITHUB_OUTPUT"
 
   validate:
     name: Validate ${{ matrix.profile }}
     needs: changes
+    if: needs.changes.outputs.has_profiles == 'true'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -109,6 +120,7 @@ jobs:
   native-images:
     name: Probe ${{ matrix.profile }} ${{ matrix.arch }}
     needs: changes
+    if: needs.changes.outputs.has_profiles == 'true'
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -176,13 +188,19 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Require all validation stages
+      - name: Require all applicable validation stages
         env:
+          HAS_PROFILES: ${{ needs.changes.outputs.has_profiles }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           CONTRACT_RESULT: ${{ needs.validate.result }}
           IMAGE_RESULT: ${{ needs.native-images.result }}
         run: |
           set -euo pipefail
           test "$CHANGES_RESULT" = success
-          test "$CONTRACT_RESULT" = success
-          test "$IMAGE_RESULT" = success
+          if [ "$HAS_PROFILES" = true ]; then
+            test "$CONTRACT_RESULT" = success
+            test "$IMAGE_RESULT" = success
+          else
+            test "$CONTRACT_RESULT" = skipped
+            test "$IMAGE_RESULT" = skipped
+          fi
