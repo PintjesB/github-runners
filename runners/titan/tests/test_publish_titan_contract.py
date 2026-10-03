@@ -119,10 +119,10 @@ def test_reusable_publisher_attests_before_exact_promotion() -> None:
     attest_uses = [
         step["uses"]
         for step in jobs["attest"]["steps"]
-        if isinstance(step, dict) and str(step.get("uses", "")).startswith("actions/attest@")
+        if isinstance(step, dict) and str(step.get("uses", "")).startswith("actions/attest-build-provenance@")
     ]
     assert len(attest_uses) == 1
-    assert re.fullmatch(r"actions/attest@[0-9a-f]{40}", attest_uses[0])
+    assert re.fullmatch(r"actions/attest-build-provenance@[0-9a-f]{40}", attest_uses[0])
     text = REUSABLE.read_text(encoding="utf-8")
     assert '"${IMAGE}@${merged}"' in text
     assert '[ "$latest" != "$merged" ]' in text
