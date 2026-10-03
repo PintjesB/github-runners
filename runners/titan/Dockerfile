@@ -56,7 +56,7 @@
 # and the host socket's group ID is mapped onto the runner user at
 # start time so the docker CLI can reach the daemon without sudo.
 
-ARG UBUNTU_BASE_DIGEST=sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea
+ARG UBUNTU_BASE_DIGEST=sha256:a853f94d226358a79c740cfc7bce0c289748f3fe3488d921d038ccd752c61b60
 FROM --platform=$BUILDPLATFORM ubuntu:24.04@${UBUNTU_BASE_DIGEST} AS base
 
 ARG DEBIAN_FRONTEND=noninteractive
