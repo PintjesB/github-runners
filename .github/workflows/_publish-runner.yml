@@ -365,7 +365,7 @@ jobs:
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
       - name: Attach provenance
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v2
+        uses: actions/attest@ce27ba3b4a9a139d9a20a4a07d69fabb52f1e5bc # v2
         with:
           subject-name: ${{ inputs.image }}
           subject-digest: ${{ steps.digest.outputs.digest }}
