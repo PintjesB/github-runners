@@ -85,7 +85,11 @@
       "matchPackageNames": [
         "actions/runner"
       ],
-      "automerge": false
+      "automerge": false,
+      "dependencyDashboardApproval": true,
+      "prBodyNotes": [
+        "The runner release uses architecture-specific SHA-256 pins. Refresh RUNNER_SHA256_ARM64 and RUNNER_SHA256_X64 from the same actions/runner release before merging."
+      ]
     }
   ],
   "customManagers": [
