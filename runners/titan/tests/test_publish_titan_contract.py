@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import yaml
 
@@ -115,8 +116,14 @@ def test_reusable_publisher_attests_before_exact_promotion() -> None:
     jobs = data["jobs"]
     assert jobs["attest"]["needs"] == "verify"
     assert jobs["promote"]["needs"] == "attest"
+    attest_uses = [
+        step["uses"]
+        for step in jobs["attest"]["steps"]
+        if isinstance(step, dict) and str(step.get("uses", "")).startswith("actions/attest@")
+    ]
+    assert len(attest_uses) == 1
+    assert re.fullmatch(r"actions/attest@[0-9a-f]{40}", attest_uses[0])
     text = REUSABLE.read_text(encoding="utf-8")
-    assert "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6" in text
     assert '"${IMAGE}@${merged}"' in text
     assert '[ "$latest" != "$merged" ]' in text
 
