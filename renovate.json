@@ -1,0 +1,100 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":enableVulnerabilityAlertsWithLabel('security')",
+    ":rebaseStalePrs",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/Brussels",
+  "labels": [
+    "renovate"
+  ],
+  "platformAutomerge": false,
+  "automergeType": "pr",
+  "ignoreTests": false,
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/bower_components/**"
+  ],
+  "packageRules": [
+    {
+      "description": "Automerge Python patch updates after CI succeeds",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "groupName": "Python patches",
+      "automerge": true
+    },
+    {
+      "description": "Automerge npm patch updates after CI succeeds",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "groupName": "npm patches",
+      "automerge": true
+    },
+    {
+      "description": "Keep GitHub Actions updates manual",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Keep Docker updates manual",
+      "matchDatasources": [
+        "docker"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Keep the baked Codex CLI update manual",
+      "matchPackageNames": [
+        "@openai/codex"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Require Dependency Dashboard approval for stateful database and datastore images",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "/^(?:[^/]+\\/)*(?:postgres|postgresql|redis|valkey|mariadb|mysql|mongo|mongodb|elasticsearch|opensearch|influxdb|clickhouse|cockroachdb|couchdb|timescaledb|postgres-documentdb)$/",
+        "mcr.microsoft.com/mssql/server"
+      ],
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Keep major dependency updates manual",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the OpenAI Codex CLI baked into the Oportunist runner",
+      "managerFilePatterns": [
+        "/^runners\\/oportunist\\/Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG CODEX_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "@openai/codex",
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "semver-coerced"
+    }
+  ],
+  "automerge": false
+}

@@ -50,6 +50,7 @@ Lifecycle invariants covered here:
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -65,8 +66,9 @@ START_RUNNER_SCRIPT = SCRIPTS_DIR / "start-runner.sh"
 PROBE_SCRIPT = SCRIPTS_DIR / "probe.sh"
 PRE_JOB_SCRIPT = SCRIPTS_DIR / "pre-job.sh"
 POST_JOB_SCRIPT = SCRIPTS_DIR / "post-job.sh"
-PROBE_PACKAGE_JSON = SCRIPTS_DIR / "probe-package.json"
-PROBE_PACKAGE_LOCK = SCRIPTS_DIR / "probe-package-lock.json"
+PROBE_DIR = ROOT / "probe"
+PROBE_PACKAGE_JSON = PROBE_DIR / "package.json"
+PROBE_PACKAGE_LOCK = PROBE_DIR / "package-lock.json"
 ENV_EXAMPLE = ROOT / ".env.example"
 DOCS_DIR = ROOT / "docs"
 SECURITY_DOC = DOCS_DIR / "security.md"
@@ -884,10 +886,10 @@ def test_dockerfile_bakes_pinned_playwright_core_install() -> None:
     """
     text = _read(DOCKERFILE)
     assert "/opt/titan-probe/package.json" in text, (
-        "Dockerfile must COPY scripts/probe-package.json into /opt/titan-probe"
+        "Dockerfile must COPY probe/package.json into /opt/titan-probe"
     )
     assert "/opt/titan-probe/package-lock.json" in text, (
-        "Dockerfile must COPY scripts/probe-package-lock.json into /opt/titan-probe"
+        "Dockerfile must COPY probe/package-lock.json into /opt/titan-probe"
     )
     assert "npm ci" in text, (
         "Dockerfile must run `npm ci` against the committed lockfile"
@@ -902,22 +904,19 @@ def test_dockerfile_bakes_pinned_playwright_core_install() -> None:
     )
 
 
-def test_probe_package_files_pin_playwright_core_version() -> None:
-    """``scripts/probe-package.json`` and its lockfile must pin
-    ``playwright-core`` to the same version as ``PLAYWRIGHT_VERSION``."""
-    package = _read(PROBE_PACKAGE_JSON)
-    lock = _read(PROBE_PACKAGE_LOCK)
+def test_probe_package_files_pin_one_playwright_core_version() -> None:
+    """The manifest owns the version and the lockfile must resolve it exactly."""
+    package = json.loads(_read(PROBE_PACKAGE_JSON))
+    lock = json.loads(_read(PROBE_PACKAGE_LOCK))
+
+    declared_version = package["dependencies"]["playwright-core"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", declared_version)
+    assert lock["packages"][""]["dependencies"]["playwright-core"] == declared_version
+    assert lock["packages"]["node_modules/playwright-core"]["version"] == declared_version
+
     dockerfile = _read(DOCKERFILE)
-    # Extract the declared playwright version from the Dockerfile ARG.
-    match = re.search(r"ARG PLAYWRIGHT_VERSION=([\d.]+)", dockerfile)
-    assert match, "Dockerfile must declare ARG PLAYWRIGHT_VERSION"
-    declared_version = match.group(1)
-    assert f'"playwright-core": "{declared_version}"' in package, (
-        "probe-package.json must pin playwright-core to PLAYWRIGHT_VERSION"
-    )
-    assert f'"version": "{declared_version}"' in lock, (
-        "probe-package-lock.json must resolve playwright-core to PLAYWRIGHT_VERSION"
-    )
+    assert "ARG PLAYWRIGHT_VERSION=" not in dockerfile
+    assert "PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}" not in dockerfile
 
 
 def test_probe_does_not_use_npx() -> None:
