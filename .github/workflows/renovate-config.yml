@@ -57,5 +57,5 @@ jobs:
 
           workflow = Path(".github/workflows/renovate-config.yml").read_text(encoding="utf-8")
           assert "npx --yes --package renovate -- renovate-config-validator --strict" in workflow
-          assert "--package renovate@" not in workflow
+          assert ("--package " + "renovate@") not in workflow
           PY
