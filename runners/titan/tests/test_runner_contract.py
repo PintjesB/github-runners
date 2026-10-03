@@ -50,6 +50,7 @@ Lifecycle invariants covered here:
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -903,22 +904,19 @@ def test_dockerfile_bakes_pinned_playwright_core_install() -> None:
     )
 
 
-def test_probe_package_files_pin_playwright_core_version() -> None:
-    """``probe/package.json`` and its lockfile must pin
-    ``playwright-core`` to the same version as ``PLAYWRIGHT_VERSION``."""
-    package = _read(PROBE_PACKAGE_JSON)
-    lock = _read(PROBE_PACKAGE_LOCK)
+def test_probe_package_files_pin_one_playwright_core_version() -> None:
+    """The manifest owns the version and the lockfile must resolve it exactly."""
+    package = json.loads(_read(PROBE_PACKAGE_JSON))
+    lock = json.loads(_read(PROBE_PACKAGE_LOCK))
+
+    declared_version = package["dependencies"]["playwright-core"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", declared_version)
+    assert lock["packages"][""]["dependencies"]["playwright-core"] == declared_version
+    assert lock["packages"]["node_modules/playwright-core"]["version"] == declared_version
+
     dockerfile = _read(DOCKERFILE)
-    # Extract the declared playwright version from the Dockerfile ARG.
-    match = re.search(r"ARG PLAYWRIGHT_VERSION=([\d.]+)", dockerfile)
-    assert match, "Dockerfile must declare ARG PLAYWRIGHT_VERSION"
-    declared_version = match.group(1)
-    assert f'"playwright-core": "{declared_version}"' in package, (
-        "probe-package.json must pin playwright-core to PLAYWRIGHT_VERSION"
-    )
-    assert f'"version": "{declared_version}"' in lock, (
-        "probe-package-lock.json must resolve playwright-core to PLAYWRIGHT_VERSION"
-    )
+    assert "ARG PLAYWRIGHT_VERSION=" not in dockerfile
+    assert "PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}" not in dockerfile
 
 
 def test_probe_does_not_use_npx() -> None:
