@@ -65,8 +65,9 @@ START_RUNNER_SCRIPT = SCRIPTS_DIR / "start-runner.sh"
 PROBE_SCRIPT = SCRIPTS_DIR / "probe.sh"
 PRE_JOB_SCRIPT = SCRIPTS_DIR / "pre-job.sh"
 POST_JOB_SCRIPT = SCRIPTS_DIR / "post-job.sh"
-PROBE_PACKAGE_JSON = SCRIPTS_DIR / "probe-package.json"
-PROBE_PACKAGE_LOCK = SCRIPTS_DIR / "probe-package-lock.json"
+PROBE_DIR = ROOT / "probe"
+PROBE_PACKAGE_JSON = PROBE_DIR / "package.json"
+PROBE_PACKAGE_LOCK = PROBE_DIR / "package-lock.json"
 ENV_EXAMPLE = ROOT / ".env.example"
 DOCS_DIR = ROOT / "docs"
 SECURITY_DOC = DOCS_DIR / "security.md"
@@ -884,10 +885,10 @@ def test_dockerfile_bakes_pinned_playwright_core_install() -> None:
     """
     text = _read(DOCKERFILE)
     assert "/opt/titan-probe/package.json" in text, (
-        "Dockerfile must COPY scripts/probe-package.json into /opt/titan-probe"
+        "Dockerfile must COPY probe/package.json into /opt/titan-probe"
     )
     assert "/opt/titan-probe/package-lock.json" in text, (
-        "Dockerfile must COPY scripts/probe-package-lock.json into /opt/titan-probe"
+        "Dockerfile must COPY probe/package-lock.json into /opt/titan-probe"
     )
     assert "npm ci" in text, (
         "Dockerfile must run `npm ci` against the committed lockfile"
@@ -903,7 +904,7 @@ def test_dockerfile_bakes_pinned_playwright_core_install() -> None:
 
 
 def test_probe_package_files_pin_playwright_core_version() -> None:
-    """``scripts/probe-package.json`` and its lockfile must pin
+    """``probe/package.json`` and its lockfile must pin
     ``playwright-core`` to the same version as ``PLAYWRIGHT_VERSION``."""
     package = _read(PROBE_PACKAGE_JSON)
     lock = _read(PROBE_PACKAGE_LOCK)
