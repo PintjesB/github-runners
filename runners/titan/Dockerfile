@@ -250,8 +250,8 @@ RUN chmod 0755 /usr/local/bin/fetch-runner \
 # ``npx`` interprets its first positional argument as a binary to
 # execute, not a package to install, so it cannot be used to
 # "install playwright-core and then run node".
-COPY scripts/probe-package.json /opt/titan-probe/package.json
-COPY scripts/probe-package-lock.json /opt/titan-probe/package-lock.json
+COPY probe/package.json /opt/titan-probe/package.json
+COPY probe/package-lock.json /opt/titan-probe/package-lock.json
 RUN cd /opt/titan-probe && npm ci --omit=dev --no-audit --no-fund \
  && npm cache clean --force
 
