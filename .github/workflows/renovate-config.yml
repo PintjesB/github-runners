@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "renovate.json"
+      - ".github/workflows/renovate-config.yml"
   push:
     branches:
       - main
     paths:
       - "renovate.json"
+      - ".github/workflows/renovate-config.yml"
 
 concurrency:
   group: renovate-config-${{ github.head_ref || github.ref_name }}
@@ -30,3 +32,30 @@ jobs:
 
       - name: Validate Renovate configuration
         run: npx --yes --package renovate -- renovate-config-validator --strict
+
+      - name: Enforce Renovate policy invariants
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          config = json.loads(Path("renovate.json").read_text(encoding="utf-8"))
+          assert config["automerge"] is False
+          assert config["platformAutomerge"] is False
+          assert config["ignoreTests"] is False
+          assert not any(rule.get("ignoreTests") is True for rule in config["packageRules"])
+
+          by_description = {
+              rule.get("description"): rule for rule in config["packageRules"]
+          }
+          assert by_description["Keep GitHub Actions updates manual"]["automerge"] is False
+          assert by_description["Keep Docker updates manual"]["automerge"] is False
+          codex = by_description["Keep the baked Codex CLI update manual"]
+          assert codex["matchPackageNames"] == ["@openai/codex"]
+          assert codex["automerge"] is False
+
+          workflow = Path(".github/workflows/renovate-config.yml").read_text(encoding="utf-8")
+          assert "npx --yes --package renovate -- renovate-config-validator --strict" in workflow
+          assert "--package renovate@" not in workflow
+          PY
