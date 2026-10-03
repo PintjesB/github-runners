@@ -79,14 +79,21 @@
         "major"
       ],
       "automerge": false
+    },
+    {
+      "description": "Keep GitHub Actions runner updates manual",
+      "matchPackageNames": [
+        "actions/runner"
+      ],
+      "automerge": false
     }
   ],
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Track the OpenAI Codex CLI baked into the Oportunist runner",
+      "description": "Track the OpenAI Codex CLI baked into both runner images",
       "managerFilePatterns": [
-        "/^runners\\/oportunist\\/Dockerfile$/"
+        "/^runners\\/(?:oportunist|titan)\\/Dockerfile$/"
       ],
       "matchStrings": [
         "ARG CODEX_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
@@ -94,6 +101,32 @@
       "depNameTemplate": "@openai/codex",
       "datasourceTemplate": "npm",
       "versioningTemplate": "semver-coerced"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the GitHub Actions runner version baked into both runner images",
+      "managerFilePatterns": [
+        "/^runners\\/(?:oportunist|titan)\\/Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG RUNNER_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "actions/runner",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the digest-pinned actionlint Docker image used by workflow lint",
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/workflow-lint\\.yml$/"
+      ],
+      "matchStrings": [
+        "ACTIONLINT_IMAGE: \"rhysd/actionlint:(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""
+      ],
+      "depNameTemplate": "rhysd/actionlint",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
     }
   ],
   "automerge": false
