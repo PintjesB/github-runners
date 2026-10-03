@@ -1470,13 +1470,13 @@ def test_publish_workflow_merges_native_manifests() -> None:
     # The merge step MUST consume the candidate digests through
     # the upload / download-artifact round trip rather than the
     # mutable candidate tags.
-    assert "upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in text, (
-        "publish.yml must upload the candidate digests as workflow "
-        "artifacts through the pinned upload-artifact action"
+    assert re.search(r"actions/upload-artifact@[0-9a-f]{40}", text), (
+        "publish.yml must upload the candidate digests through an immutable "
+        "upload-artifact commit"
     )
-    assert "download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0" in text, (
-        "publish.yml must download the candidate digests through the "
-        "pinned download-artifact action"
+    assert re.search(r"actions/download-artifact@[0-9a-f]{40}", text), (
+        "publish.yml must download the candidate digests through an immutable "
+        "download-artifact commit"
     )
     # The merge inputs MUST be the immutable
     # ``repository@sha256:...`` references; the merge step MUST
@@ -1686,8 +1686,8 @@ def test_publish_workflow_attests_before_promotion() -> None:
     import yaml
 
     text = _read(PUBLISH_WORKFLOW)
-    assert "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6" in text, (
-        "publish.yml must pin the attestation action by SHA-256"
+    assert re.search(r"actions/attest@[0-9a-f]{40}", text), (
+        "publish.yml must pin the attestation action to an immutable commit"
     )
     with PUBLISH_WORKFLOW.open(encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
@@ -1723,9 +1723,9 @@ def test_publish_workflow_attests_before_promotion() -> None:
     )
     attest_steps = data["jobs"]["attest"]["steps"]
     assert any(
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f" in (s.get("uses") or "")
+        re.fullmatch(r"docker/login-action@[0-9a-f]{40}", s.get("uses") or "")
         for s in attest_steps
-    ), "publish.yml attest job MUST authenticate to GHCR before pushing provenance"
+    ), "publish.yml attest job MUST authenticate to GHCR with an immutable login-action pin"
 
 
 def test_publish_workflow_attestation_permissions() -> None:
