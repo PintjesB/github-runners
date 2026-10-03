@@ -80,8 +80,8 @@ def test_reusable_publisher_builds_native_amd64_and_arm64() -> None:
 
 def test_reusable_publisher_uses_immutable_digest_handoff() -> None:
     text = REUSABLE.read_text(encoding="utf-8")
-    assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in text
-    assert "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0" in text
+    assert re.search(r"actions/upload-artifact@[0-9a-f]{40}", text)
+    assert re.search(r"actions/download-artifact@[0-9a-f]{40}", text)
     assert '"${IMAGE}@${amd64}"' in text
     assert '"${IMAGE}@${arm64}"' in text
 
