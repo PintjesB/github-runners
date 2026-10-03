@@ -22,7 +22,7 @@ jobs:
       contents: read
     steps:
       - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
       - name: Install contract dependencies
@@ -64,11 +64,11 @@ jobs:
       packages: write
     steps:
       - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
@@ -76,7 +76,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Build native candidate
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ./runners/${{ inputs.profile }}
           file: ./runners/${{ inputs.profile }}/Dockerfile
@@ -136,7 +136,7 @@ jobs:
       packages: write
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
@@ -144,12 +144,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Download amd64 digest
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.profile }}-candidate-amd64
           path: ${{ runner.temp }}/inputs/amd64
       - name: Download arm64 digest
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.profile }}-candidate-arm64
           path: ${{ runner.temp }}/inputs/arm64
@@ -312,7 +312,7 @@ jobs:
       contents: read
     steps:
       - name: Download merged digest
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.profile }}-merged-digest
           path: ${{ runner.temp }}
@@ -353,7 +353,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Download merged digest
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.profile }}-merged-digest
           path: ${{ runner.temp }}
@@ -365,7 +365,7 @@ jobs:
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
       - name: Attach provenance
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v2
+        uses: actions/attest@ce27ba3b4a9a139d9a20a4a07d69fabb52f1e5bc # v2
         with:
           subject-name: ${{ inputs.image }}
           subject-digest: ${{ steps.digest.outputs.digest }}
@@ -380,7 +380,7 @@ jobs:
       packages: write
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
@@ -388,7 +388,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Download merged digest
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.profile }}-merged-digest
           path: ${{ runner.temp }}
