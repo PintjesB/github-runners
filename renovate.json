@@ -19,15 +19,47 @@
   ],
   "packageRules": [
     {
-      "description": "Automerge routine non-major dependency updates after CI succeeds",
-      "matchUpdateTypes": [
-        "minor",
-        "patch",
-        "pin",
-        "pinDigest",
-        "digest"
+      "description": "Automerge Python patch updates after CI succeeds",
+      "matchManagers": [
+        "pip_requirements"
       ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "groupName": "Python patches",
       "automerge": true
+    },
+    {
+      "description": "Automerge npm patch updates after CI succeeds",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "groupName": "npm patches",
+      "automerge": true
+    },
+    {
+      "description": "Keep GitHub Actions updates manual",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Keep Docker updates manual",
+      "matchDatasources": [
+        "docker"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Keep the baked Codex CLI update manual",
+      "matchPackageNames": [
+        "@openai/codex"
+      ],
+      "automerge": false
     },
     {
       "description": "Require Dependency Dashboard approval for stateful database and datastore images",
