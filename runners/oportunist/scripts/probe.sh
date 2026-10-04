@@ -8,13 +8,14 @@ fail() { printf '  FAIL %s\n' "$*" >&2; exit 1; }
 
 titan-evidence --help >/dev/null
 
-for binary in docker gh git bash node npm python3 codex; do
+for binary in docker gh git bash node npm python3 codex lsb_release; do
     command -v "$binary" >/dev/null 2>&1 || fail "missing binary: $binary"
     ok "binary: $binary"
 done
 
 docker compose version >/dev/null 2>&1 || fail "docker compose unavailable"
 docker buildx version >/dev/null 2>&1 || fail "docker buildx unavailable"
+lsb_release -ds >/dev/null 2>&1 || fail "lsb_release unavailable"
 
 info="$(docker info --format '{{.Architecture}}' 2>/dev/null)" || fail "docker daemon unreachable"
 case "$info" in
