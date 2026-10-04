@@ -1,5 +1,9 @@
 # titan-stocks-runner
 
+For the optional `titan-ci-light` listener, persistent pip/npm volumes, release
+ordering, and bounded cache maintenance, see the
+[CI capacity runbook](../../docs/ci-capacity-and-caches.md).
+
 Public repository that owns the persistent multi-platform GitHub
 Actions runner for
 [PintjesB/titan-stocks](https://github.com/PintjesB/titan-stocks).
@@ -76,7 +80,7 @@ runner container
         |
         +--- titan-runner-browser volume    Playwright cache
         |                                    seeded from the baked
-        |                                    image cache on first start
+        |                                    image cache for missing revisions
         |
         +--- /var/run/docker.sock/          host bind mount
                                              daemon access as supplemental group
@@ -215,7 +219,7 @@ VM-level network isolation contract is documented in
 | State | `titan-runner-state` volume holds the Actions runner credentials |
 | Runtime | disposable materialised tree at `/var/lib/titan-runner/runtime/`; rebuilt on every container start |
 | Work | named volume `titan-runner-work` mounted at the fixed `/var/lib/titan-runner/work` path; it starts empty on migration and persists runner checkouts; child Compose services must mount this volume externally at the same path |
-| Browser | `titan-runner-browser` volume holds the Playwright cache; seeded from the baked image cache on first start |
+| Browser | `titan-runner-browser` volume holds the Playwright cache; startup atomically adds missing image-required revisions and preserves existing complete revisions |
 | Hygiene | pre-job hook validates VM capabilities and confirms the Docker daemon architecture matches the native runner architecture (`RUNNER_ARCH=X64`/`ARM64`); post-job hook tears down only `titan-stocks-playwright-` Compose projects (containers, networks, project-owned volumes); never recurses the runner's `_work` directory or removes external runner volumes; never runs a global prune; hooks activated through `ACTIONS_RUNNER_HOOK_JOB_STARTED` and `ACTIONS_RUNNER_HOOK_JOB_COMPLETED` |
 | Lifecycle lock | `flock /var/lock/titan-runner.lock` around `up` and `down`; `register.sh` additionally holds `state/.lock/register.lock` so startup registration is serialised |
 | Image pin | every deployment references `ghcr.io/pintjesb/titan-stocks-runner@sha256:<digest>` |

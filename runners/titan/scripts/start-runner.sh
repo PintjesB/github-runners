@@ -36,9 +36,8 @@
 #                              the Playwright Chromium browser cache.
 #                              Seeded from the baked image cache
 #                              ``/home/runner/.cache/ms-playwright``
-#                              on the first start; subsequent starts
-#                              reuse whatever the volume already
-#                              contains.
+#                              on startup when an image-required revision
+#                              is missing; existing revisions are preserved.
 #
 #   /home/runner/.codex        Persistent ``titan-runner-codex``
 #                              named volume. Holds replaceable Codex
@@ -67,8 +66,8 @@
 #   5. Rebuilds the runtime tree from ``/opt/actions-runner`` and
 #      overlays the persisted registration files onto it.
 #   6. Seeds the persistent browser volume from the baked image
-#      cache only on the first start; subsequent starts use the
-#      existing contents.
+#      cache, adding missing image-required revisions while preserving
+#      existing complete revisions.
 #   7. Launches ``run.sh`` directly via ``gosu`` with no runtime
 #      flags. ``--disableupdate`` is set at registration and
 #      persists in the ``.runner`` manifest.
@@ -86,7 +85,7 @@
 #   RUNNER_BROWSER_DIR  Persistent Playwright cache. Default
 #                       ``/var/lib/titan-runner/browser``.
 #   RUNNER_BROWSER_SEED Baked image cache the persistent volume is
-#                       seeded from on first start. Default
+#                       seeded from for missing revisions. Default
 #                       ``/home/runner/.cache/ms-playwright``.
 #   RUNNER_ROOT         Image-owned source tree. Default
 #                       ``/opt/actions-runner``.
@@ -120,7 +119,9 @@ RUNNER_BROWSER_DIR="${RUNNER_BROWSER_DIR:-/var/lib/titan-runner/browser}"
 RUNNER_BROWSER_SEED="${RUNNER_BROWSER_SEED:-/home/runner/.cache/ms-playwright}"
 RUNNER_ROOT="${RUNNER_ROOT:-/opt/actions-runner}"
 CODEX_HOME="${CODEX_HOME:-/home/runner/.codex}"
-export CODEX_HOME
+PIP_CACHE_DIR="${PIP_CACHE_DIR:-/var/lib/titan-runner/cache/pip}"
+npm_config_cache="${npm_config_cache:-/var/lib/titan-runner/cache/npm}"
+export CODEX_HOME PIP_CACHE_DIR npm_config_cache
 
 # The Compose service is the only long-lived container. Registration is
 # an internal startup phase, and these traps ensure the short-lived
@@ -178,6 +179,8 @@ install -d -m 0750 -o runner -g runner \
     "$RUNNER_RUNTIME_DIR" \
     "$RUNNER_WORK_DIR" \
     "$RUNNER_BROWSER_DIR" \
+    "$PIP_CACHE_DIR" \
+    "$npm_config_cache" \
     "$CODEX_HOME"
 chown -R runner:runner "$CODEX_HOME"
 
@@ -204,22 +207,51 @@ chmod 0640 "$RUNNER_RUNTIME_DIR/.runner"
 chmod 0600 "$RUNNER_RUNTIME_DIR/.credentials" \
           "$RUNNER_RUNTIME_DIR/.credentials_rsaparams" 2>/dev/null || true
 
-# Seed the persistent Playwright browser cache from the baked image
-# cache only on the first start. The volume persists across container
-# recreations; subsequent starts reuse its contents. We deliberately
-# do NOT use ``ln -sfn`` because the baked cache is a populated real
-# directory, not a target for a symlink.
+# Merge image-required Playwright revisions into the persistent cache.
+# Publish complete directories with an atomic rename on the same volume;
+# an interrupted copy must never leave a partially seeded final revision.
 seed_browser_cache() {
-    local seed="$1" dest="$2"
+    local seed="$1" dest="$2" entry name target staging link
     [ -d "$seed" ] || return 0
-    # ``find`` exits 0 and prints at least one path when the
-    # destination already contains a Chromium build, so we use it
-    # as a single-shot "is the cache populated?" probe.
-    if [ -n "$(find "$dest" -mindepth 1 -maxdepth 1 -type d -name 'chromium-*' -print -quit 2>/dev/null)" ]; then
-        return 0
-    fi
-    log "seeding persistent Playwright browser cache from $seed"
-    cp -a "$seed/." "$dest/"
+    for entry in "$seed"/* "$seed"/.links; do
+        [ -d "$entry" ] || continue
+        name="${entry##*/}"
+        target="$dest/$name"
+        if [ "$name" = .links ]; then
+            # Preserve other installations' registrations. The image probe's
+            # link prevents Playwright GC from discarding its required browsers.
+            mkdir -p "$target"
+            for link in "$entry"/*; do
+                [ -f "$link" ] || continue
+                [ ! -e "$target/${link##*/}" ] || continue
+                staging="$(mktemp "$target/.seed.XXXXXX")"
+                if ! cp -a "$link" "$staging"; then
+                    rm -f "$staging"
+                    return 1
+                fi
+                mv "$staging" "$target/${link##*/}"
+            done
+            continue
+        fi
+        if [ ! -f "$entry/INSTALLATION_COMPLETE" ]; then
+            log "ERROR: image browser revision is incomplete: $entry"
+            return 1
+        fi
+        if [ -e "$target" ]; then
+            if [ ! -d "$target" ] || [ ! -f "$target/INSTALLATION_COMPLETE" ]; then
+                log "ERROR: existing browser revision is incomplete; preserve and inspect: $target"
+                return 1
+            fi
+            continue
+        fi
+        log "seeding missing Playwright browser revision: $name"
+        staging="$(mktemp -d "$dest/.seed.XXXXXX")"
+        if ! cp -a "$entry/." "$staging/"; then
+            rm -rf "$staging"
+            return 1
+        fi
+        mv "$staging" "$target"
+    done
 }
 seed_browser_cache "$RUNNER_BROWSER_SEED" "$RUNNER_BROWSER_DIR"
 chown -R runner:runner "$RUNNER_BROWSER_DIR"

@@ -18,6 +18,8 @@ services:
       RUNNER_STATE_DIR: ${TITAN_RUNNER_STATE_DIR:-/var/lib/titan-runner/state}
       RUNNER_RUNTIME_DIR: ${TITAN_RUNNER_RUNTIME_DIR:-/var/lib/titan-runner/runtime}
       RUNNER_WORK_DIR: /var/lib/titan-runner/work
+      PIP_CACHE_DIR: /var/lib/titan-runner/cache/pip
+      npm_config_cache: /var/lib/titan-runner/cache/npm
       RUNNER_BROWSER_DIR: ${TITAN_RUNNER_BROWSER_DIR:-/var/lib/titan-runner/browser}
       RUNNER_ROOT: ${TITAN_RUNNER_ROOT:-/opt/actions-runner}
       CODEX_HOME: /home/runner/.codex
@@ -31,6 +33,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - titan-runner-state:/var/lib/titan-runner/state
       - titan-runner-work:/var/lib/titan-runner/work
+      - titan-runner-cache:/var/lib/titan-runner/cache
       - titan-runner-browser:/var/lib/titan-runner/browser
       # ChatGPT/Codex login state. Deleting this volume only requires re-login.
       - titan-runner-codex:/home/runner/.codex
@@ -50,6 +53,31 @@ services:
     networks:
       - titan-runner-net
 
+  # Activate explicitly after registering the independent light listener.
+  runner-light:
+    extends:
+      service: runner
+    profiles: [ci-light]
+    container_name: titan-runner-light
+    cpus: 1
+    mem_limit: 2g
+    environment:
+      RUNNER_STATE_DIR: /var/lib/titan-runner/state
+      RUNNER_RUNTIME_DIR: /var/lib/titan-runner/runtime
+      RUNNER_NAME: ${TITAN_RUNNER_LIGHT_NAME:-titan-ci-light}
+      RUNNER_LABELS: titan-ci-light
+      RUNNER_TOKEN: ${TITAN_RUNNER_LIGHT_TOKEN:-}
+      # Light-job completion must never clean up an active heavy-job stack.
+      ACTIONS_RUNNER_HOOK_JOB_STARTED: ""
+      ACTIONS_RUNNER_HOOK_JOB_COMPLETED: ""
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - titan-runner-light-state:/var/lib/titan-runner/state
+      - titan-runner-light-work:/var/lib/titan-runner/work
+      - titan-runner-light-cache:/var/lib/titan-runner/cache
+      - titan-runner-light-browser:/var/lib/titan-runner/browser
+      - titan-runner-light-codex:/home/runner/.codex
+
 networks:
   titan-runner-net:
     name: titan-runner-net
@@ -64,3 +92,15 @@ volumes:
     name: titan-runner-browser
   titan-runner-codex:
     name: titan-runner-codex
+  titan-runner-cache:
+    name: titan-runner-cache
+  titan-runner-light-state:
+    name: titan-runner-light-state
+  titan-runner-light-work:
+    name: titan-runner-light-work
+  titan-runner-light-cache:
+    name: titan-runner-light-cache
+  titan-runner-light-codex:
+    name: titan-runner-light-codex
+  titan-runner-light-browser:
+    name: titan-runner-light-browser

@@ -1,5 +1,9 @@
 # Oportunist runner
 
+For the optional `oportunist-ci-light` listener, persistent pip/npm volumes,
+release ordering, and bounded cache maintenance, see the
+[CI capacity runbook](../../docs/ci-capacity-and-caches.md).
+
 Lean persistent self-hosted GitHub Actions runner for `PintjesB/oportunist`.
 
 ## Included capabilities
