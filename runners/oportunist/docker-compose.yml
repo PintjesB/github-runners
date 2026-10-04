@@ -18,12 +18,15 @@ services:
       RUNNER_STATE_DIR: /var/lib/oportunist-runner/state
       RUNNER_RUNTIME_DIR: /var/lib/oportunist-runner/runtime
       RUNNER_WORK_DIR: /var/lib/oportunist-runner/work
+      PIP_CACHE_DIR: /var/lib/oportunist-runner/cache/pip
+      npm_config_cache: /var/lib/oportunist-runner/cache/npm
       RUNNER_ROOT: /opt/actions-runner
       CODEX_HOME: /home/runner/.codex
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - oportunist-runner-state:/var/lib/oportunist-runner/state
       - oportunist-runner-work:/var/lib/oportunist-runner/work
+      - oportunist-runner-cache:/var/lib/oportunist-runner/cache
       - oportunist-runner-codex:/home/runner/.codex
     healthcheck:
       test:
@@ -37,6 +40,27 @@ services:
     networks:
       - oportunist-runner-net
 
+  # Activate explicitly after registering the independent light listener.
+  runner-light:
+    extends:
+      service: runner
+    profiles: [ci-light]
+    container_name: oportunist-runner-light
+    cpus: 1
+    mem_limit: 2g
+    environment:
+      RUNNER_STATE_DIR: /var/lib/oportunist-runner/state
+      RUNNER_RUNTIME_DIR: /var/lib/oportunist-runner/runtime
+      RUNNER_NAME: ${OPORTUNIST_RUNNER_LIGHT_NAME:-oportunist-ci-light}
+      RUNNER_LABELS: oportunist-ci-light
+      RUNNER_TOKEN: ${OPORTUNIST_RUNNER_LIGHT_TOKEN:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - oportunist-runner-light-state:/var/lib/oportunist-runner/state
+      - oportunist-runner-light-work:/var/lib/oportunist-runner/work
+      - oportunist-runner-light-cache:/var/lib/oportunist-runner/cache
+      - oportunist-runner-light-codex:/home/runner/.codex
+
 networks:
   oportunist-runner-net:
     name: oportunist-runner-net
@@ -49,3 +73,13 @@ volumes:
     name: oportunist-runner-work
   oportunist-runner-codex:
     name: oportunist-runner-codex
+  oportunist-runner-cache:
+    name: oportunist-runner-cache
+  oportunist-runner-light-state:
+    name: oportunist-runner-light-state
+  oportunist-runner-light-work:
+    name: oportunist-runner-light-work
+  oportunist-runner-light-cache:
+    name: oportunist-runner-light-cache
+  oportunist-runner-light-codex:
+    name: oportunist-runner-light-codex

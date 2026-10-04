@@ -103,11 +103,13 @@ def _validate(resolved: dict | None, raw: dict) -> None:
     services = data.get("services")
     if not isinstance(services, dict):
         _fail("docker-compose.yml must declare `services:` as a mapping")
-    if set(services) != {"runner"}:
+    if "runner" not in services or set(services) - {"runner", "runner-light"}:
         _fail(
-            "docker-compose.yml must declare exactly one service, `runner`; "
+            "docker-compose.yml must declare `runner` and only the optional light listener; "
             "registration is an internal startup phase"
         )
+    if "runner-light" in services and services["runner-light"].get("profiles") != ["ci-light"]:
+        _fail("runner-light must require explicit ci-light profile activation")
     runner = services["runner"]
     if not isinstance(runner, dict):
         _fail("docker-compose.yml `runner` service must be a mapping")

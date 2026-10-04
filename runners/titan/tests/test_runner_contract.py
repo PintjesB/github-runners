@@ -872,12 +872,14 @@ def test_compose_healthcheck_uses_lightweight_signal() -> None:
 
 
 def test_compose_has_no_registration_sidecar() -> None:
-    """The Compose stack must contain only the steady-state runner."""
+    """Both services are steady-state listeners; light activation is opt-in."""
     import yaml
 
     with COMPOSE_FILE.open(encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
-    assert set(data.get("services", {})) == {"runner"}
+    assert set(data.get("services", {})) == {"runner", "runner-light"}
+    assert data["services"]["runner-light"]["profiles"] == ["ci-light"]
+    assert data["services"]["runner-light"]["extends"] == {"service": "runner"}
 
 
 def test_dockerfile_bakes_pinned_playwright_core_install() -> None:
@@ -2114,14 +2116,16 @@ def test_fetch_runner_maps_targetarch_and_rejects_unsupported() -> None:
     )
 
 
-def test_compose_has_exactly_one_runner_service() -> None:
-    """Compose must not create a disposable registration service."""
+def test_compose_has_one_heavy_and_optional_light_listener() -> None:
+    """Both listeners register internally; the light listener is opt-in."""
     import yaml
 
     with COMPOSE_FILE.open(encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
-    assert set(data.get("services", {})) == {"runner"}
+    assert set(data.get("services", {})) == {"runner", "runner-light"}
     assert "depends_on" not in data["services"]["runner"]
+    assert "depends_on" not in data["services"]["runner-light"]
+    assert data["services"]["runner-light"]["profiles"] == ["ci-light"]
 
 
 def test_compose_runner_receives_startup_registration_token() -> None:
@@ -3079,21 +3083,15 @@ def test_security_doc_documents_vm_boundary_first() -> None:
         )
 
 
-def test_security_doc_documents_one_runner_per_vm() -> None:
-    """The VM boundary section MUST require exactly one runner
-    listener per VM.
-
-    Adding a sibling listener would require a separate VM with
-    independently scoped state and work volumes; the documentation
-    MUST pin this rule so the contract is auditable.
-    """
+def test_security_doc_documents_one_repository_boundary_per_vm() -> None:
+    """Light concurrency does not cross repository or heavy-job boundaries."""
     text = _read(SECURITY_DOC)
     code_only = "\n".join(
         line for line in text.splitlines() if not line.lstrip().startswith("#")
     )
-    assert "One runner per VM" in code_only or "one runner per VM" in code_only.lower(), (
-        "docs/security.md must declare the `one runner per VM` rule"
-    )
+    assert "One repository trust boundary per VM" in code_only
+    assert "one heavy listener" in code_only
+    assert "same trusted repository" in code_only
 
 
 def test_vm_deployment_doc_documents_acceptance_checks() -> None:

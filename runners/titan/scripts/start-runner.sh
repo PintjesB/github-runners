@@ -120,7 +120,9 @@ RUNNER_BROWSER_DIR="${RUNNER_BROWSER_DIR:-/var/lib/titan-runner/browser}"
 RUNNER_BROWSER_SEED="${RUNNER_BROWSER_SEED:-/home/runner/.cache/ms-playwright}"
 RUNNER_ROOT="${RUNNER_ROOT:-/opt/actions-runner}"
 CODEX_HOME="${CODEX_HOME:-/home/runner/.codex}"
-export CODEX_HOME
+PIP_CACHE_DIR="${PIP_CACHE_DIR:-/var/lib/titan-runner/cache/pip}"
+npm_config_cache="${npm_config_cache:-/var/lib/titan-runner/cache/npm}"
+export CODEX_HOME PIP_CACHE_DIR npm_config_cache
 
 # The Compose service is the only long-lived container. Registration is
 # an internal startup phase, and these traps ensure the short-lived
@@ -178,6 +180,8 @@ install -d -m 0750 -o runner -g runner \
     "$RUNNER_RUNTIME_DIR" \
     "$RUNNER_WORK_DIR" \
     "$RUNNER_BROWSER_DIR" \
+    "$PIP_CACHE_DIR" \
+    "$npm_config_cache" \
     "$CODEX_HOME"
 chown -R runner:runner "$CODEX_HOME"
 

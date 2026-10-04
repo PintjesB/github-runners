@@ -1,5 +1,9 @@
 # titan-stocks-runner
 
+For the optional `titan-ci-light` listener, persistent pip/npm volumes, release
+ordering, and bounded cache maintenance, see the
+[CI capacity runbook](../../docs/ci-capacity-and-caches.md).
+
 Public repository that owns the persistent multi-platform GitHub
 Actions runner for
 [PintjesB/titan-stocks](https://github.com/PintjesB/titan-stocks).

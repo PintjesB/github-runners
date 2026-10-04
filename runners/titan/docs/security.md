@@ -26,9 +26,13 @@ the boundary; the VM platform is the *outer* half.
 
 Five rules apply:
 
-* **One runner per VM.** A single persistent listener runs on
-  the VM. Adding a sibling listener requires a separate VM with
-  independently scoped state, work, and browser volumes.
+* **One repository trust boundary per VM.** Keep one heavy listener.
+  The opt-in light listener may run concurrently only for the same trusted repository,
+  with separate state/work/cache/browser/Codex volumes and light-only labels.
+  Its cleanup hooks are disabled to protect the active heavy job. A listener
+  for another repository requires a separate VM. Separate volumes protect
+  normal operation; direct Docker socket access does not isolate a compromised
+  listener from its sibling or the VM.
 * **No production data on the VM.** The VM MUST NOT store
   production databases, application secrets, deployment
   credentials, customer data, or any workload that is unrelated
@@ -61,8 +65,8 @@ Five rules apply:
 
 Rebuild the VM if runner integrity is in doubt. The container
 boundary is *not* the recovery boundary. After a suspected
-compromise, revoke the runner and discard the VM, credentials, and
-all three runner-owned volumes; never copy them into the replacement.
+compromise, revoke both listeners and discard the VM, credentials, and
+all runner-owned volumes; never copy them into the replacement.
 The new VM registers normally with fresh state and a fresh
 token.
 

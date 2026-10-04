@@ -7,6 +7,7 @@ while IFS= read -r script; do
 done < <(find scripts -type f -name '*.sh' -print)
 
 docker compose --env-file .env.example config >/dev/null
+python3 ../titan/tests/test_dependency_cache.py
 
 grep -q '@openai/codex' Dockerfile
 grep -q 'docker-compose-v2' Dockerfile
