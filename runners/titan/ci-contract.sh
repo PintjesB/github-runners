@@ -13,6 +13,7 @@ grep -q 'lsb-release' Dockerfile
 
 bash tests/test_runner_scripts.sh
 python3 tests/test_dependency_cache.py
+python3 tests/test_browser_cache.py
 
 # The original Titan contract file predates the monorepo layout. Keep all
 # non-publication assertions there and validate repository-level publication

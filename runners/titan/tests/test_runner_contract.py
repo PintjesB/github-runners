@@ -968,7 +968,7 @@ def test_probe_validates_host_gateway_alias() -> None:
 
 def test_start_runner_seeds_browser_volume_and_exports_path() -> None:
     """``start-runner.sh`` MUST seed the persistent browser volume from
-    the baked image cache on first start and export
+    the baked image cache for missing revisions and export
     ``PLAYWRIGHT_BROWSERS_PATH`` into the runner environment."""
     text = _read(START_RUNNER_SCRIPT)
     code_only = "\n".join(
@@ -979,12 +979,9 @@ def test_start_runner_seeds_browser_volume_and_exports_path() -> None:
         "start-runner.sh must not symlink the image cache over the baked "
         "directory; the seed is via cp -a"
     )
-    # The seed step may live in a helper function; both forms are
-    # acceptable.
-    assert (
-        'cp -a "$RUNNER_BROWSER_SEED/." "$RUNNER_BROWSER_DIR/"' in code_only
-        or ('cp -a "$seed/." "$dest/"' in code_only and "RUNNER_BROWSER_SEED" in code_only and "RUNNER_BROWSER_DIR" in code_only)
-    ), "start-runner.sh must seed the persistent browser dir via cp -a"
+    # Missing revisions are copied into staging before publication. Upgrade,
+    # restart, and failed-copy behavior is exercised by test_browser_cache.py.
+    assert 'cp -a "$entry/." "$staging/"' in code_only
     assert "PLAYWRIGHT_BROWSERS_PATH=\"$RUNNER_BROWSER_DIR\"" in code_only, (
         "start-runner.sh must export PLAYWRIGHT_BROWSERS_PATH into the runner env"
     )

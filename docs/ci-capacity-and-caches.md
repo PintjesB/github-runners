@@ -48,6 +48,13 @@ cleanup targets Titan Playwright projects on the shared daemon; running it
 after a light job would interfere with the active heavy job. Keep only one heavy
 Titan listener until that cleanup and other global resource names are redesigned.
 
+Titan startup adds missing browser revisions from the image into each persistent
+browser volume, preserving older complete revisions and other Playwright `.links`
+records. Copies are staged on that volume and published only after completion.
+If an existing required revision lacks `INSTALLATION_COMPLETE`, startup stops
+without overwriting it. Inspect and move that incomplete directory aside while
+the listener is stopped before retrying; preserve all complete revisions.
+
 ## Package cache maintenance
 
 Each listener mounts its own cache volume at `/var/lib/<profile>-runner/cache`.
