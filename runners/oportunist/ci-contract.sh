@@ -14,6 +14,8 @@ grep -q 'docker-buildx' Dockerfile
 grep -q 'python3' Dockerfile
 grep -q 'nodejs' Dockerfile
 grep -q 'lsb-release' Dockerfile
+grep -q '(.Ephemeral // false) == false' scripts/register.sh
+grep -q 'persisted runner registration is ephemeral/one-shot' scripts/register.sh
 ! grep -qi 'playwright' Dockerfile
 ! grep -qi 'chromium' Dockerfile
 ! grep -qi 'postgresql-client' Dockerfile
