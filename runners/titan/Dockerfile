@@ -111,6 +111,7 @@ RUN apt-get update \
         file \
         gnupg \
         jq \
+        lsb-release \
         tini \
         gosu \
         # Docker CLI + Compose v2 plugin + Buildx (CLI plugins ship
