@@ -158,6 +158,7 @@ EXISTING_REPO=
 EXISTING_NAME=
 EXISTING_LABELS=
 STATE_COMPLETE=0
+STATE_PERSISTENT=0
 if [ -s "$RUNNER_STATE_DIR/.runner" ] && [ -s "$RUNNER_STATE_DIR/.credentials" ] \
         && [ -s "$RUNNER_STATE_DIR/diagnostics.txt" ]; then
     STATE_COMPLETE=1
@@ -168,10 +169,20 @@ if [ -s "$RUNNER_STATE_DIR/.runner" ] && [ -s "$RUNNER_STATE_DIR/.credentials" ]
             runner_labels) EXISTING_LABELS="${value}" ;;
         esac
     done < "$RUNNER_STATE_DIR/diagnostics.txt"
+
+    # Older deployments used one-shot/ephemeral registrations. GitHub
+    # de-registers those after one job, while the local credentials remain
+    # in the persistent state volume. Never reuse such state as a persistent
+    # listener. RunnerSettings omits false booleans, so a missing Ephemeral
+    # property is equivalent to false.
+    if jq -e '(.Ephemeral // false) == false' "$RUNNER_STATE_DIR/.runner" >/dev/null 2>&1; then
+        STATE_PERSISTENT=1
+    fi
 fi
 
 identity_matches() {
     [ "$STATE_COMPLETE" -eq 1 ] \
+        && [ "$STATE_PERSISTENT" -eq 1 ] \
         && [ "$EXISTING_REPO" = "$REPO_URL" ] \
         && [ "$EXISTING_NAME" = "$RUNNER_NAME" ] \
         && [ "$EXISTING_LABELS" = "$RUNNER_LABELS" ]
@@ -290,6 +301,9 @@ fi
 if [ "${RUNNER_TOKEN:-}" = "" ]; then
     if [ "$STATE_COMPLETE" -eq 0 ]; then
         fail "no persisted credentials found and RUNNER_TOKEN is empty. Set TITAN_RUNNER_TOKEN in the .env file and rerun 'docker compose up -d'." 2
+    fi
+    if [ "$STATE_PERSISTENT" -ne 1 ]; then
+        fail "persisted runner registration is ephemeral/one-shot and cannot be reused as a persistent listener. Set a fresh TITAN_RUNNER_TOKEN in the .env file and rerun './deploy.sh up' once to replace it." 2
     fi
     fail "persisted credentials have a different identity (existing_repo='$EXISTING_REPO' requested_repo='$REPO_URL'). Set TITAN_RUNNER_TOKEN in the .env file and rerun 'docker compose up -d' to refresh them." 2
 fi

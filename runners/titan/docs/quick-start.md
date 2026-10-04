@@ -160,10 +160,12 @@ The internal `register.sh` phase is idempotent:
   repository URL, runner name, and label list), registration exits
   successfully without contacting GitHub and without requiring
   `TITAN_RUNNER_TOKEN`.
-* If the state is missing or has drifted, registration contacts
+* If the state is missing, has drifted, or its persisted `.runner`
+  manifest is an old ephemeral/one-shot registration, registration contacts
   GitHub using `RUNNER_TOKEN` (forwarded from
   `TITAN_RUNNER_TOKEN`) and persists the new credentials into
-  the same volume. A transactional local backup ensures that an
+  the same volume. Ephemeral state is never reused because GitHub de-registers
+  one-shot runners after their first job. A transactional local backup ensures that an
   ordinary `config.sh` commit error restores the previously
   working credentials. The local rollback is best-effort; the
   GitHub-side runner record is not transactionally restored

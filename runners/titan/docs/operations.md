@@ -333,8 +333,12 @@ docker compose pull
 docker compose up -d
 ```
 
-A token is only necessary when the `state` volume is empty or
-the persisted identity has drifted.
+A token is only necessary when the `state` volume is empty, the persisted
+identity has drifted, or the persisted `.runner` manifest is an old
+ephemeral/one-shot registration. Ephemeral registrations are deliberately
+rejected even when repository URL, runner name, and labels match because GitHub
+de-registers them after one job. Supply a fresh `TITAN_RUNNER_TOKEN` and run
+`./deploy.sh up` once to replace that state with a persistent registration.
 
 After a suspected compromise, revoke the runner and discard the
 VM, credentials, all runner-owned volumes, and the old host

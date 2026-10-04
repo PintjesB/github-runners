@@ -186,6 +186,7 @@ def test_dockerfile_installs_documented_capabilities() -> None:
         "libpangocairo-1.0-0",
         "/opt/titan-probe/node_modules/.bin/playwright-core install chromium",
         "gosu",
+        "jq",
         "tini",
     ):
         assert marker in text, f"Dockerfile must install capability: {marker!r}"
@@ -2210,6 +2211,19 @@ def test_register_is_idempotent_without_token() -> None:
         "register.sh must fail with actionable guidance when "
         "state has drifted and the token is empty"
     )
+
+
+def test_register_rejects_persisted_ephemeral_state() -> None:
+    """Persisted one-shot credentials must never be treated as a reusable listener."""
+    text = _read(REGISTER_SCRIPT)
+    code_only = "\n".join(
+        line for line in text.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "STATE_PERSISTENT" in code_only
+    assert "(.Ephemeral // false) == false" in code_only
+    assert "persisted runner registration is ephemeral/one-shot" in code_only
+    identity_block = code_only.split("identity_matches() {", 1)[1].split("}", 1)[0]
+    assert 'STATE_PERSISTENT" -eq 1' in identity_block
 
 
 def test_register_is_transactional() -> None:
