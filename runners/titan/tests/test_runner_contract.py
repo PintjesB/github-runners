@@ -459,7 +459,7 @@ def test_compose_pins_image_and_attaches_to_bridge_network() -> None:
         "no-new-privileges:true",
         "privileged: false",
         "/var/run/docker.sock:/var/run/docker.sock",
-        "restart: unless-stopped",
+        "restart: always",
     ):
         assert marker in text, f"docker-compose.yml must declare {marker!r}"
 
