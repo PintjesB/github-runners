@@ -34,6 +34,10 @@ docker compose up -d
 
 After registration succeeds, blank `OPORTUNIST_RUNNER_TOKEN` and recreate the service. Persistent runner identity lives in `oportunist-runner-state`.
 
+If that volume contains an older ephemeral/one-shot registration, startup
+intentionally refuses to reuse it. Set a fresh `OPORTUNIST_RUNNER_TOKEN` and
+recreate the service once so GitHub replaces it with a persistent registration.
+
 ## Codex authentication
 
 Codex authentication is intentionally stored in its own Docker volume, `oportunist-runner-codex`, mounted at `/home/runner/.codex`.
