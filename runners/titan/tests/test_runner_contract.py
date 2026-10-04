@@ -186,6 +186,7 @@ def test_dockerfile_installs_documented_capabilities() -> None:
         "libpangocairo-1.0-0",
         "/opt/titan-probe/node_modules/.bin/playwright-core install chromium",
         "gosu",
+        "jq",
         "tini",
     ):
         assert marker in text, f"Dockerfile must install capability: {marker!r}"
