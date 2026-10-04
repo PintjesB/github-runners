@@ -33,6 +33,12 @@ if sys.version_info < (3, 12):
 PY
 ok "python: $(python3 --version)"
 
+venv_root="$(mktemp -d)"
+trap 'rm -rf "$venv_root"' EXIT
+python3 -m venv "$venv_root/venv" || fail "python venv creation failed"
+"$venv_root/venv/bin/python" -m pip --version >/dev/null 2>&1 || fail "pip missing from python venv"
+ok "python venv and pip available"
+
 node_major="$(node -p 'process.versions.node.split(".")[0]')"
 [ "$node_major" = 24 ] || fail "Node 24 required, got $(node --version)"
 ok "node: $(node --version)"
