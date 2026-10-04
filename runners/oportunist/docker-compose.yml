@@ -2,7 +2,7 @@ services:
   runner:
     image: ${OPORTUNIST_RUNNER_IMAGE:?OPORTUNIST_RUNNER_IMAGE is required}
     container_name: oportunist-runner
-    restart: unless-stopped
+    restart: always
     security_opt:
       - no-new-privileges:true
     privileged: false

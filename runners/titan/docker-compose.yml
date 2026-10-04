@@ -2,7 +2,7 @@ services:
   runner:
     image: ${TITAN_RUNNER_IMAGE:?TITAN_RUNNER_IMAGE must be pinned by digest}
     container_name: titan-runner
-    restart: unless-stopped
+    restart: always
     security_opt:
       - no-new-privileges:true
     privileged: false
