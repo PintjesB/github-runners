@@ -8,13 +8,14 @@ fail() { printf '  FAIL %s\n' "$*" >&2; exit 1; }
 
 titan-evidence --help >/dev/null
 
-for binary in docker gh git bash node npm python3 codex; do
+for binary in docker gh git bash node npm python3 codex lsb_release; do
     command -v "$binary" >/dev/null 2>&1 || fail "missing binary: $binary"
     ok "binary: $binary"
 done
 
 docker compose version >/dev/null 2>&1 || fail "docker compose unavailable"
 docker buildx version >/dev/null 2>&1 || fail "docker buildx unavailable"
+lsb_release -ds >/dev/null 2>&1 || fail "lsb_release unavailable"
 
 info="$(docker info --format '{{.Architecture}}' 2>/dev/null)" || fail "docker daemon unreachable"
 case "$info" in
@@ -31,6 +32,12 @@ if sys.version_info < (3, 12):
     raise SystemExit(f"Python 3.12+ required, got {sys.version.split()[0]}")
 PY
 ok "python: $(python3 --version)"
+
+venv_root="$(mktemp -d)"
+trap 'rm -rf "$venv_root"' EXIT
+python3 -m venv "$venv_root/venv" || fail "python venv creation failed"
+"$venv_root/venv/bin/python" -m pip --version >/dev/null 2>&1 || fail "pip missing from python venv"
+ok "python venv and pip available"
 
 node_major="$(node -p 'process.versions.node.split(".")[0]')"
 [ "$node_major" = 24 ] || fail "Node 24 required, got $(node --version)"

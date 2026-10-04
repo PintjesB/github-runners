@@ -22,7 +22,7 @@ ENV LANG=C.UTF-8 \
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      bash ca-certificates coreutils curl file git gnupg gzip gosu jq tini tar unzip wget xz-utils zip \
+      bash ca-certificates coreutils curl file git gnupg gzip gosu jq lsb-release tini tar unzip wget xz-utils zip \
       docker.io docker-compose-v2 docker-buildx \
       python3 python3-pip python3-venv \
  && rm -rf /var/lib/apt/lists/*

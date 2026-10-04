@@ -130,6 +130,8 @@ probe_codex() {
 }
 
 probe_python() {
+    require_binary lsb_release
+    lsb_release -ds >/dev/null
     local python=""
     for candidate in python python3 python3.12; do
         if command -v "$candidate" >/dev/null 2>&1; then

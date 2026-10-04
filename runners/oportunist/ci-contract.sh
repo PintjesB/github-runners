@@ -13,6 +13,7 @@ grep -q 'docker-compose-v2' Dockerfile
 grep -q 'docker-buildx' Dockerfile
 grep -q 'python3' Dockerfile
 grep -q 'nodejs' Dockerfile
+grep -q 'lsb-release' Dockerfile
 ! grep -qi 'playwright' Dockerfile
 ! grep -qi 'chromium' Dockerfile
 ! grep -qi 'postgresql-client' Dockerfile
