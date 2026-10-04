@@ -9,6 +9,8 @@ while IFS= read -r script; do
     shellcheck -S warning "$script"
 done < <(find . -path './tests/__pycache__' -prune -o -type f -name '*.sh' -print)
 
+grep -q 'lsb-release' Dockerfile
+
 bash tests/test_runner_scripts.sh
 
 # The original Titan contract file predates the monorepo layout. Keep all
