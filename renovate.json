@@ -19,45 +19,118 @@
   ],
   "packageRules": [
     {
-      "description": "Automerge Python patch updates after CI succeeds",
+      "description": "Automerge Python dependency patches after CI",
       "matchManagers": [
         "pip_requirements"
       ],
       "matchUpdateTypes": [
         "patch"
       ],
-      "groupName": "Python patches",
-      "automerge": true
+      "automerge": true,
+      "matchFileNames": [
+        "runners/titan/**",
+        "runners/oportunist/**"
+      ]
     },
     {
-      "description": "Automerge npm patch updates after CI succeeds",
+      "description": "Automerge npm dependency patches after CI",
       "matchManagers": [
         "npm"
       ],
       "matchUpdateTypes": [
         "patch"
       ],
-      "groupName": "npm patches",
-      "automerge": true
+      "automerge": true,
+      "matchFileNames": [
+        "runners/titan/**",
+        "runners/oportunist/**"
+      ]
     },
     {
-      "description": "Keep GitHub Actions updates manual",
+      "description": "Automerge npm lockfile maintenance after CI",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "lockFileMaintenance"
+      ],
+      "automerge": true,
+      "matchFileNames": [
+        "runners/titan/**",
+        "runners/oportunist/**"
+      ]
+    },
+    {
+      "description": "Automerge stable Python and npm minors after CI",
+      "matchManagers": [
+        "pip_requirements",
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "matchCurrentVersion": "/^[1-9]\\d*\\.\\d+(?:\\.\\d+)?$/",
+      "automerge": true,
+      "matchFileNames": [
+        "runners/titan/**",
+        "runners/oportunist/**"
+      ]
+    },
+    {
+      "description": "Automerge explicitly tested validation Actions after CI",
       "matchManagers": [
         "github-actions"
       ],
-      "automerge": false
+      "matchPackageNames": [
+        "actions/setup-node"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "minor",
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "automerge": true
     },
     {
-      "description": "Keep Docker updates manual",
+      "description": "Automerge actionlint updates exercised by workflow lint",
       "matchDatasources": [
         "docker"
+      ],
+      "matchPackageNames": [
+        "rhysd/actionlint"
+      ],
+      "matchFileNames": [
+        ".github/workflows/workflow-lint.yml"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "minor",
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Keep untested and privileged GitHub Actions manual",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "!actions/setup-node"
       ],
       "automerge": false
     },
     {
-      "description": "Keep the baked Codex CLI update manual",
+      "description": "Keep CI runtime toolchains manual",
+      "matchManagers": [
+        "github-actions"
+      ],
       "matchPackageNames": [
-        "@openai/codex"
+        "python",
+        "node"
       ],
       "automerge": false
     },
@@ -74,9 +147,9 @@
       "automerge": false
     },
     {
-      "description": "Keep major dependency updates manual",
-      "matchUpdateTypes": [
-        "major"
+      "description": "Keep the baked Codex CLI update manual",
+      "matchPackageNames": [
+        "@openai/codex"
       ],
       "automerge": false
     },
@@ -90,6 +163,33 @@
       "prBodyNotes": [
         "The runner release uses architecture-specific SHA-256 pins. Refresh RUNNER_SHA256_ARM64 and RUNNER_SHA256_X64 from the same actions/runner release before merging."
       ]
+    },
+    {
+      "description": "Keep pre-1.0 and prerelease dependency minors manual",
+      "matchManagers": [
+        "pip_requirements",
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "matchCurrentVersion": "!/^[1-9]\\d*\\.\\d+(?:\\.\\d+)?$/",
+      "automerge": false
+    },
+    {
+      "description": "Keep major dependency updates manual",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Keep manual updates out of automatic dependency groups",
+      "matchJsonata": [
+        "automerge = false"
+      ],
+      "groupName": null,
+      "groupSlug": null
     }
   ],
   "customManagers": [
@@ -133,5 +233,11 @@
       "versioningTemplate": "docker"
     }
   ],
-  "automerge": false
+  "automerge": false,
+  "internalChecksAsSuccess": false,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": false,
+    "groupName": null
+  }
 }
