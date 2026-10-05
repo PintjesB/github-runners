@@ -5,12 +5,14 @@ on:
     paths:
       - "renovate.json"
       - ".github/workflows/renovate-config.yml"
+      - ".github/workflows/validate.yml"
   push:
     branches:
       - main
     paths:
       - "renovate.json"
       - ".github/workflows/renovate-config.yml"
+      - ".github/workflows/validate.yml"
 
 concurrency:
   group: renovate-config-${{ github.head_ref || github.ref_name }}
@@ -39,29 +41,105 @@ jobs:
       - name: Validate Renovate configuration
         run: npx --yes --package renovate -- renovate-config-validator --strict
 
-      - name: Enforce Renovate policy invariants
+      - name: Exercise effective Renovate policy
         shell: bash
         run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          config = json.loads(Path("renovate.json").read_text(encoding="utf-8"))
-          assert config["automerge"] is False
-          assert config["platformAutomerge"] is False
-          assert config["ignoreTests"] is False
-          assert not any(rule.get("ignoreTests") is True for rule in config["packageRules"])
-
-          by_description = {
-              rule.get("description"): rule for rule in config["packageRules"]
+          npx --yes --package renovate -- node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { pathToFileURL } from 'node:url';
+          // Test Renovate itself, including inherited presets; no imitation matcher.
+          const bin = process.env.PATH.split(path.delimiter)
+            .map(dir => path.join(dir, 'renovate-config-validator')).find(file => fs.existsSync(file));
+          assert.ok(bin, 'Run with npx --package renovate');
+          const dist = path.dirname(fs.realpathSync(bin));
+          const load = file => import(pathToFileURL(path.join(dist, file)));
+          const { init } = await load('logger/index.js');
+          await init();
+          const { applyPackageRules } = await load('util/package-rules/index.js');
+          const { resolveConfigPresets } = await load('config/presets/index.js');
+          const raw = JSON.parse(fs.readFileSync('renovate.json', 'utf8'));
+          const resolved = await resolveConfigPresets(raw);
+          const config = resolved.config ?? resolved;
+          const cases = [];
+          const add = (manager, depName, updateType, want, packageFile, version = '1.2.3', datasource) =>
+            cases.push([{ manager, depName, packageName: depName, updateType, packageFile,
+              datasource: datasource ?? ({npm:'npm', 'github-actions':'github-tags', 'dockerfile':'docker',
+                'custom.regex':'docker'}[manager] ?? 'pypi'),
+              sourceUrl: ['react','react-dom'].includes(depName) ? 'https://github.com/facebook/react' :
+              ['vitest','@vitest/coverage-v8'].includes(depName) ? 'https://github.com/vitest-dev/vitest' : undefined,
+              currentValue: version, currentVersion: version, lockedVersion: version, versioning: 'semver' }, want]);
+          const routine = ['patch', 'minor', 'pin', 'pinDigest', 'digest'];
+          for (const [manager, file] of [["pip_requirements", "runners/titan/evidence/requirements.txt"], ["npm", "runners/titan/probe/package.json"]]) {
+            for (const [update, want, version] of [['patch',true,'0.3.0'], ['minor',true,'1.2.3'],
+              ['minor',false,'0.3.0'], ['major',false,'1.2.3'], ['minor',false,'1.2.3-beta.1']]) {
+              add(manager, manager === 'npm' ? 'patchright' : 'redis', update, want, file, version);
+            }
+            if (manager === 'npm') {
+              add(manager, 'react', 'minor', true, file);
+              add(manager, undefined, 'lockFileMaintenance', true, file);
+            } else if (manager === 'pip-compile') add(manager, undefined, 'lockFileMaintenance', false, file);
           }
-          assert by_description["Keep GitHub Actions updates manual"]["automerge"] is False
-          assert by_description["Keep Docker updates manual"]["automerge"] is False
-          codex = by_description["Keep the baked Codex CLI update manual"]
-          assert codex["matchPackageNames"] == ["@openai/codex"]
-          assert codex["automerge"] is False
-
-          workflow = Path(".github/workflows/renovate-config.yml").read_text(encoding="utf-8")
-          assert "npx --yes --package renovate -- renovate-config-validator --strict" in workflow
-          assert ("--package " + "renovate@") not in workflow
-          PY
+          for (const pkg of ["actions/setup-node"]) {
+            for (const update of routine) add('github-actions', pkg, update, true, '.github/workflows/renovate-config.yml');
+          }
+          for (const pkg of ["actions/checkout", "docker/setup-buildx-action", "docker/login-action", "docker/build-push-action", "actions/upload-artifact", "actions/download-artifact", "actions/attest-build-provenance", "unreviewed/validation-action", "python", "node"]) {
+            for (const update of [...routine, 'major']) add('github-actions', pkg, update, false, '.github/workflows/ci.yml');
+          }
+          for (const pkg of []) {
+            for (const update of ['patch','pin','pinDigest','digest']) add('dockerfile', pkg, update, true, 'Dockerfile');
+            for (const update of ['minor','major']) add('dockerfile', pkg, update, false, 'Dockerfile');
+          }
+          for (const update of routine) add('custom.regex', 'rhysd/actionlint', update, true, '.github/workflows/workflow-lint.yml');
+          for (const pkg of ['postgres','redis','ghcr.io/example/postgres','mcr.microsoft.com/mssql/server','unreviewed/image']) {
+            for (const update of [...routine,'major']) add('dockerfile', pkg, update, false, 'Dockerfile');
+          }
+          for (const pkg of ["@openai/codex", "actions/runner"]) {
+            for (const update of [...routine,'major']) add(['@openai/codex','chromatic'].includes(pkg) ? 'npm' : 'custom.regex',
+              pkg, update, false, "runners/titan/probe/package.json", '1.2.3', ['@openai/codex','chromatic'].includes(pkg) ? 'npm' : 'github-releases');
+          }
+          add('unknown-manager', 'unknown/package', 'patch', false, 'unknown');
+          add('npm', 'patchright', 'minor', false, 'uncovered/package.json');
+          add('pip_requirements', 'redis', 'patch', false, 'uncovered/requirements.txt');
+          const failures = [];
+          for (const [dependency, want] of cases) {
+            const result = await applyPackageRules({ ...config, ...dependency });
+            const label = `${dependency.manager} ${dependency.depName} ${dependency.updateType} ${dependency.currentVersion}`;
+            if (result.automerge !== want) failures.push(`${label}: expected automerge=${want}, got ${result.automerge}`);
+            if (!want && result.groupName != null) failures.push(`${label}: mixed group ${result.groupName}`);
+            if (result.ignoreTests !== false || result.platformAutomerge !== false || result.automergeType !== 'pr' || result.internalChecksAsSuccess === true) failures.push(`${label}: CI bypass`);
+            if (dependency.datasource === 'docker' && ['postgres','redis','ghcr.io/example/postgres','mcr.microsoft.com/mssql/server'].includes(dependency.depName)) {
+              if (result.dependencyDashboardApproval !== true) failures.push(`${label}: stateful approval missing`);
+            }
+          }
+          for (const key of ['automerge','platformAutomerge','ignoreTests']) assert.equal(raw[key], false);
+          assert.notEqual(config.internalChecksAsSuccess, true);
+          assert.ok(!(raw.packageRules || []).some(rule => rule.ignoreTests === true || rule.platformAutomerge === true || rule.internalChecksAsSuccess === true));
+          assert.deepEqual(failures, [], failures.join('\n'));
+          console.log(`Verified ${cases.length} effective dependency cases with Renovate`);
+          const workflow = fs.readFileSync('.github/workflows/validate.yml', 'utf8');
+          assert.ok(workflow.includes('--requirement tests/requirements.txt --requirement evidence/requirements.txt'),
+            'Contract tests must install the changed evidence pins, with conflicts blocking CI');
+          // Run the existing classifier with controlled changed-file input; matching logic is unmodified.
+          const { spawnSync } = await import('node:child_process');
+          const { tmpdir } = await import('node:os');
+          const block = workflow.split('- name: Select affected profiles')[1].split('      - name:')[0].split('run: |\n')[1];
+          const lines = block.split('\n');
+          const end = lines.findIndex(line => line.trim() && !line.startsWith('          '));
+          const classify = lines.slice(0, end < 0 ? undefined : end).map(line => line.replace(/^          /, '')).join('\n');
+          const temp = fs.mkdtempSync(path.join(tmpdir(), 'renovate-policy-'));
+          try {
+            for (const [file, expected] of [["runners/titan/evidence/requirements.txt", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/titan/tests/requirements.txt", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/titan/probe/package-lock.json", ["has_profiles=true", "profiles=[\"titan\"]"]], [".github/workflows/renovate-config.yml", ["has_profiles=true", "profiles=[\"titan\",\"oportunist\"]"]]]) {
+              const output = path.join(temp, 'output');
+              fs.writeFileSync(output, '');
+              const run = spawnSync('bash', ['-c', `git() { if [ "$1" = diff ]; then printf '%s\n' "$CHANGED_FILES"; else command git "$@"; fi; }\n${classify}`], {
+                encoding: 'utf8', env: { ...process.env, EVENT_NAME: 'pull_request', CHANGED_FILES: file,
+                  PR_BASE_SHA: 'HEAD', HEAD_SHA: 'HEAD', BASE_SHA: 'HEAD', FULL_INPUT: 'false', EMERGENCY_INPUT: 'false', GITHUB_OUTPUT: output }
+              });
+              assert.equal(run.status, 0, run.stderr);
+              const flags = fs.readFileSync(output, 'utf8').trim().split('\n');
+              for (const flag of expected) assert.ok(flags.includes(flag), `${file} must produce ${flag}: ${flags}`);
+            }
+          } finally { fs.rmSync(temp, { recursive: true }); }
+          NODE

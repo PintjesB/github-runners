@@ -110,7 +110,7 @@ jobs:
           fi
           if [ -f tests/requirements.txt ]; then
             python3 -m pip install --quiet --upgrade pip
-            python3 -m pip install --quiet --requirement tests/requirements.txt
+            python3 -m pip install --quiet --requirement tests/requirements.txt --requirement evidence/requirements.txt
           fi
 
       - name: Run profile contract
