@@ -206,6 +206,24 @@
       "groupName": "GitHub artifact transport major migration",
       "groupSlug": "github-artifact-transport-major",
       "automerge": false
+    },
+    {
+      "description": "Label dependency PRs Renovate will auto-merge",
+      "matchJsonata": [
+        "automerge = true"
+      ],
+      "addLabels": [
+        "auto merge"
+      ]
+    },
+    {
+      "description": "Label dependency PRs that require manual merge",
+      "matchJsonata": [
+        "automerge = false"
+      ],
+      "addLabels": [
+        "manual merge"
+      ]
     }
   ],
   "customManagers": [
