@@ -114,6 +114,13 @@ jobs:
             }
           }
           for (const key of ['automerge','platformAutomerge','ignoreTests']) assert.equal(raw[key], false);
+          assert.equal(raw.lockFileMaintenance?.automerge, true, 'npm lockfile maintenance must automerge only after validation');
+          const artifactMajor = raw.packageRules.find(rule => rule.description === 'Review artifact transport Action majors together');
+          assert.ok(artifactMajor, 'artifact transport major group missing');
+          assert.deepEqual(artifactMajor.matchPackageNames, ['actions/upload-artifact', 'actions/download-artifact']);
+          assert.deepEqual(artifactMajor.matchUpdateTypes, ['major']);
+          assert.equal(artifactMajor.groupName, 'GitHub artifact transport major migration');
+          assert.equal(artifactMajor.automerge, false);
           assert.notEqual(config.internalChecksAsSuccess, true);
           assert.ok(!(raw.packageRules || []).some(rule => rule.ignoreTests === true || rule.platformAutomerge === true || rule.internalChecksAsSuccess === true));
           assert.deepEqual(failures, [], failures.join('\n'));
