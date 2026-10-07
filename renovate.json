@@ -190,6 +190,22 @@
       ],
       "groupName": null,
       "groupSlug": null
+    },
+    {
+      "description": "Review artifact transport Action majors together",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "actions/upload-artifact",
+        "actions/download-artifact"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "GitHub artifact transport major migration",
+      "groupSlug": "github-artifact-transport-major",
+      "automerge": false
     }
   ],
   "customManagers": [
@@ -237,7 +253,7 @@
   "internalChecksAsSuccess": false,
   "lockFileMaintenance": {
     "enabled": true,
-    "automerge": false,
+    "automerge": true,
     "groupName": null
   }
 }
