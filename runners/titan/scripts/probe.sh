@@ -231,6 +231,7 @@ probe_node
 probe_codex
 probe_python
 probe_postgres_client
+require_binary envsubst
 probe_playwright
 probe_host_gateway
 if [ "${1:-}" != "--skip-network" ]; then
