@@ -38,13 +38,16 @@ jobs:
           node-version: "lts/*"
           package-manager-cache: false
 
+      - name: Install Renovate validator once
+        run: npm install --global --no-audit --no-fund renovate
+
       - name: Validate Renovate configuration
-        run: npx --yes --package renovate -- renovate-config-validator --strict
+        run: renovate-config-validator --strict
 
       - name: Exercise effective Renovate policy
         shell: bash
         run: |
-          npx --yes --package renovate -- node --input-type=module <<'NODE'
+          node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import fs from 'node:fs';
           import path from 'node:path';
@@ -52,7 +55,7 @@ jobs:
           // Test Renovate itself, including inherited presets; no imitation matcher.
           const bin = process.env.PATH.split(path.delimiter)
             .map(dir => path.join(dir, 'renovate-config-validator')).find(file => fs.existsSync(file));
-          assert.ok(bin, 'Run with npx --package renovate');
+          assert.ok(bin, 'Global Renovate validator was not installed');
           const dist = path.dirname(fs.realpathSync(bin));
           const load = file => import(pathToFileURL(path.join(dist, file)));
           const { init } = await load('logger/index.js');
@@ -154,7 +157,7 @@ jobs:
           const classify = lines.slice(0, end < 0 ? undefined : end).map(line => line.replace(/^          /, '')).join('\n');
           const temp = fs.mkdtempSync(path.join(tmpdir(), 'renovate-policy-'));
           try {
-            for (const [file, expected] of [["runners/titan/evidence/requirements.txt", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/titan/tests/requirements.txt", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/titan/probe/package-lock.json", ["has_profiles=true", "profiles=[\"titan\"]"]], [".github/workflows/renovate-config.yml", ["has_profiles=true", "profiles=[\"titan\",\"oportunist\"]"]]]) {
+            for (const [file, expected] of [["runners/titan/evidence/requirements.txt", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/titan/tests/requirements.txt", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/titan/probe/package-lock.json", ["has_profiles=true", "profiles=[\"titan\"]"]], [".github/workflows/renovate-config.yml", ["has_profiles=false"]], [".github/workflows/_publish-runner.yml", ["has_profiles=true", "profiles=[\"titan\",\"oportunist\"]"]]]) {
               const output = path.join(temp, 'output');
               fs.writeFileSync(output, '');
               const run = spawnSync('bash', ['-c', `git() { if [ "$1" = diff ]; then printf '%s\n' "$CHANGED_FILES"; else command git "$@"; fi; }\n${classify}`], {
