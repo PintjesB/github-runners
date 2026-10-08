@@ -102,6 +102,13 @@ jobs:
           add('unknown-manager', 'unknown/package', 'patch', false, 'unknown');
           add('npm', 'patchright', 'minor', false, 'uncovered/package.json');
           add('pip_requirements', 'redis', 'patch', false, 'uncovered/requirements.txt');
+          for (const update of ['patch','minor','pin','pinDigest','digest','major']) {
+            add('dockerfile','ubuntu',update,false,'runners/titan/Dockerfile','24.04.1');
+            add('dockerfile','ubuntu',update,false,'runners/oportunist/Dockerfile','24.04.1');
+          }
+          assert.equal(raw.statusCheckWhen?.artifactError,'always','Renovate artifact validation must be visible');
+          assert.equal(raw.internalChecksFilter,'strict','Do not open unaged npm release branches');
+          assert.ok(raw.packageRules.some(rule => rule.matchDatasources?.includes('npm') && rule.minimumReleaseAge === '3 days'), 'npm release cooldown must be configured');
           const failures = [];
           for (const [dependency, want] of cases) {
             const result = await applyPackageRules({ ...config, ...dependency });
