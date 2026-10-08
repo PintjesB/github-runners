@@ -39,7 +39,7 @@ jobs:
           package-manager-cache: false
 
       - name: Install Renovate validator once
-        run: npm install --global --no-audit --no-fund renovate
+        run: npm install --global --no-audit --no-fund renovate@44.103.0
 
       - name: Validate Renovate configuration
         run: renovate-config-validator --strict
