@@ -108,12 +108,15 @@ jobs:
           }
           assert.equal(raw.statusCheckWhen?.artifactError,'always','Renovate artifact validation must be visible');
           assert.equal(raw.internalChecksFilter,'strict','Do not open unaged npm release branches');
-          assert.ok(raw.packageRules.some(rule => rule.matchDatasources?.includes('npm') && rule.minimumReleaseAge === '3 days'), 'npm release cooldown must be configured');
+          assert.ok(raw.packageRules.some(rule => rule.matchDatasources?.includes('npm') && rule.minimumReleaseAge === '3 days' && rule.matchJsonata?.includes('automerge = true')), 'npm cooldown must apply only after effective automerge classification');
           const failures = [];
           for (const [dependency, want] of cases) {
             const result = await applyPackageRules({ ...config, ...dependency });
             const label = `${dependency.manager} ${dependency.depName} ${dependency.updateType} ${dependency.currentVersion}`;
             if (result.automerge !== want) failures.push(`${label}: expected automerge=${want}, got ${result.automerge}`);
+            if (dependency.datasource === 'npm' && result.minimumReleaseAge !== (want ? '3 days' : undefined)) {
+              failures.push(`${label}: release-age should apply only to auto npm updates (got ${result.minimumReleaseAge})`);
+            }
             const mergeLabels = result.addLabels ?? [];
             const expectedMergeLabel = want ? 'auto merge' : 'manual merge';
             const unexpectedMergeLabel = want ? 'manual merge' : 'auto merge';
