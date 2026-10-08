@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Match merge-status label to Renovate's actual PR decision
         env:
