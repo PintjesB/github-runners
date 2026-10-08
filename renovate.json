@@ -208,6 +208,27 @@
       "automerge": false
     },
     {
+      "description": "Wait three days before selecting npm releases, including transitive lockfile resolutions where supported",
+      "matchDatasources": [
+        "npm"
+      ],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Keep privileged runner foundation image changes manual pending lifecycle validation",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ubuntu"
+      ],
+      "matchFileNames": [
+        "runners/oportunist/Dockerfile",
+        "runners/titan/Dockerfile"
+      ],
+      "automerge": false
+    },
+    {
       "description": "Label dependency PRs Renovate will auto-merge",
       "matchJsonata": [
         "automerge = true"
@@ -273,5 +294,9 @@
     "enabled": true,
     "automerge": true,
     "groupName": null
-  }
+  },
+  "statusCheckWhen": {
+    "artifactError": "always"
+  },
+  "internalChecksFilter": "strict"
 }
