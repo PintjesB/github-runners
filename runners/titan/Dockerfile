@@ -110,6 +110,7 @@ RUN apt-get update \
         zip \
         file \
         gnupg \
+        gettext-base \
         jq \
         lsb-release \
         tini \
