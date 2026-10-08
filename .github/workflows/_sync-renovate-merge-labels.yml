@@ -13,7 +13,10 @@ jobs:
           github.event.pull_request.user.login == 'tristan-renovate[bot]' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
           startsWith(github.event.pull_request.head.ref, 'renovate/') }}
-    runs-on: ubuntu-24.04
+    # Keep lightweight reconciliation off exhausted private-repository hosted minutes.
+    # Caller context is preserved by reusable workflows. Public repositories keep
+    # the hosted runner; private app repositories use their existing light pools.
+    runs-on: ${{ github.repository == 'PintjesB/oportunist' && fromJSON('["self-hosted","linux","oportunist-ci-light"]') || github.repository == 'PintjesB/titan-stocks' && fromJSON('["self-hosted","linux","titan-ci-light"]') || 'ubuntu-24.04' }}
     permissions:
       issues: write
       pull-requests: write
