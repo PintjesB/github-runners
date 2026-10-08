@@ -58,7 +58,153 @@ jobs:
           if printf '%s\n' "$files" | grep -E '^runners/oportunist/' >/dev/null; then
             oportunist=true
           fi
-          if printf '%s\n' "$files" | grep -E '^\.github/workflows/' >/dev/null; then
+          # Metadata-only workflows do not change runner image capabilities.
+          # Keep all other workflow changes fail-safe: validate both profiles.
+          if printf '%s\n' "$files" | grep -E '^\.github/workflows/' \
+              | grep -Ev '^\.github/workflows/(renovate-config|workflow-lint|sync-renovate-labels|_sync-renovate-merge-labels)\.yml
+
+          if [ "$titan" = true ] && [ "$oportunist" = true ]; then
+            profiles='["titan","oportunist"]'
+          elif [ "$titan" = true ]; then
+            profiles='["titan"]'
+          elif [ "$oportunist" = true ]; then
+            profiles='["oportunist"]'
+          else
+            # Keep a syntactically valid matrix value, but skip the expensive
+            # profile jobs. The final Required CI job still reports success.
+            profiles='["titan"]'
+            {
+              echo "profiles=$profiles"
+              echo 'has_profiles=false'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "profiles=$profiles"
+            echo 'has_profiles=true'
+          } >> "$GITHUB_OUTPUT"
+
+  validate:
+    name: Validate ${{ matrix.profile }}
+    needs: changes
+    if: needs.changes.outputs.has_profiles == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJSON(needs.changes.outputs.profiles) }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install contract dependencies
+        working-directory: runners/${{ matrix.profile }}
+        run: |
+          set -euo pipefail
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends shellcheck
+          fi
+          if [ -f tests/requirements.txt ]; then
+            python3 -m pip install --quiet --upgrade pip
+            python3 -m pip install --quiet --requirement tests/requirements.txt --requirement evidence/requirements.txt
+          fi
+
+      - name: Run profile contract
+        working-directory: runners/${{ matrix.profile }}
+        run: ./ci-contract.sh
+
+  native-images:
+    name: Probe ${{ matrix.profile }} ${{ matrix.arch }}
+    needs: changes
+    if: needs.changes.outputs.has_profiles == 'true'
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJSON(needs.changes.outputs.profiles) }}
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Build native runner
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: runners/${{ matrix.profile }}
+          file: runners/${{ matrix.profile }}/Dockerfile
+          load: true
+          tags: runner-under-test:latest
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=runner-${{ matrix.profile }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=min,scope=runner-${{ matrix.profile }}-${{ matrix.arch }}
+
+      - name: Probe native runner
+        run: |
+          docker run --rm --entrypoint /usr/local/bin/probe \
+            --security-opt no-new-privileges:true \
+            --add-host host.docker.internal:host-gateway --shm-size 2gb \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e HOME=/tmp -e EXPECTED_ARCH=${{ matrix.arch }} \
+            runner-under-test:latest --skip-network
+
+      - name: Build evidence service
+        if: matrix.profile == 'titan'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: runners/titan/evidence
+          load: true
+          tags: evidence-under-test:latest
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=titan-evidence-${{ matrix.arch }}
+          cache-to: type=gha,mode=min,scope=titan-evidence-${{ matrix.arch }}
+
+  required:
+    name: Required CI
+    if: always()
+    needs:
+      - changes
+      - validate
+      - native-images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Require all applicable validation stages
+        env:
+          HAS_PROFILES: ${{ needs.changes.outputs.has_profiles }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          CONTRACT_RESULT: ${{ needs.validate.result }}
+          IMAGE_RESULT: ${{ needs.native-images.result }}
+        run: |
+          set -euo pipefail
+          test "$CHANGES_RESULT" = success
+          if [ "$HAS_PROFILES" = true ]; then
+            test "$CONTRACT_RESULT" = success
+            test "$IMAGE_RESULT" = success
+          else
+            test "$CONTRACT_RESULT" = skipped
+            test "$IMAGE_RESULT" = skipped
+          fi
+ >/dev/null; then
             titan=true
             oportunist=true
           fi
