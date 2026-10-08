@@ -40,11 +40,15 @@ jobs:
             unwanted_path="auto%20merge"
           fi
 
-          current="$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/labels" --jq '.[].name')"
+          # Use the PR event payload for labels; no extra read API permission.
+          current="$(jq -r '.pull_request.labels[]?.name' "$GITHUB_EVENT_PATH")"
+          echo "Reconciling PR #$PR_NUMBER (desired: $wanted)"
           if printf '%s\n' "$current" | grep -Fxq "$unwanted"; then
+            echo "Removing stale $unwanted label"
             gh api --method DELETE "repos/$GH_REPO/issues/$PR_NUMBER/labels/$unwanted_path" >/dev/null
           fi
           if ! printf '%s\n' "$current" | grep -Fxq "$wanted"; then
+            echo "Adding $wanted label"
             gh api --method POST "repos/$GH_REPO/issues/$PR_NUMBER/labels" -f "labels[]=$wanted" >/dev/null
           fi
           echo "Renovate merge status: $decision -> $wanted"
