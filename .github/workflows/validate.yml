@@ -58,7 +58,10 @@ jobs:
           if printf '%s\n' "$files" | grep -E '^runners/oportunist/' >/dev/null; then
             oportunist=true
           fi
-          if printf '%s\n' "$files" | grep -E '^\.github/workflows/' >/dev/null; then
+          # Metadata-only workflows cannot affect runner image capabilities.
+          # Unexpected workflow changes still validate both profiles.
+          if printf '%s\n' "$files" | grep -E '^\.github/workflows/' \
+              | grep -Ev '^\.github/workflows/(renovate-config|workflow-lint|sync-renovate-labels|_sync-renovate-merge-labels)\.yml$' >/dev/null; then
             titan=true
             oportunist=true
           fi

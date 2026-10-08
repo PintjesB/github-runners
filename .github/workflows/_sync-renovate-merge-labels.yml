@@ -1,0 +1,50 @@
+name: Reconcile Renovate merge labels
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  sync:
+    name: Reconcile Renovate PR labels
+    if: >-
+      ${{ github.event_name == 'pull_request_target' &&
+          github.event.pull_request.user.login == 'tristan-renovate[bot]' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          startsWith(github.event.pull_request.head.ref, 'renovate/') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - name: Match merge-status label to Renovate's actual PR decision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Renovate's rendered PR body reports the *branch-level* decision.
+          # Per-dependency addLabels can aggregate opposite labels for a
+          # mixed major/minor branch even though automerge is disabled.
+          decision="$(jq -r '.pull_request.body // "" | split("\n") | map(select(startswith("🚦 **Automerge**: "))) | last // ""' "$GITHUB_EVENT_PATH")"
+          if [ "$decision" = "🚦 **Automerge**: Enabled." ]; then
+            wanted="auto merge"
+            unwanted="manual merge"
+            unwanted_path="manual%20merge"
+          else
+            # Missing/unrecognized decision is never treated as automerge.
+            wanted="manual merge"
+            unwanted="auto merge"
+            unwanted_path="auto%20merge"
+          fi
+
+          current="$(gh api "repos/$GH_REPO/issues/$PR_NUMBER/labels" --jq '.[].name')"
+          if printf '%s\n' "$current" | grep -Fxq "$unwanted"; then
+            gh api --method DELETE "repos/$GH_REPO/issues/$PR_NUMBER/labels/$unwanted_path" >/dev/null
+          fi
+          if ! printf '%s\n' "$current" | grep -Fxq "$wanted"; then
+            gh api --method POST "repos/$GH_REPO/issues/$PR_NUMBER/labels" -f "labels[]=$wanted" >/dev/null
+          fi
+          echo "Renovate merge status: $decision -> $wanted"
