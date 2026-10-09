@@ -32,10 +32,38 @@ jobs:
       - name: Run pinned actionlint
         shell: bash
         env:
-          ACTIONLINT_IMAGE: "rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667"
+          ACTIONLINT_VERSION: "1.7.12"
         run: |
           set -euo pipefail
-          docker run --rm \
-            --volume "${GITHUB_WORKSPACE}:/repo:ro" \
-            --workdir /repo \
-            "${ACTIONLINT_IMAGE}" -color
+          # Use the upstream release instead of Docker Hub's anonymous pull pool.
+          # Each supported architecture has a hard-pinned upstream archive SHA-256.
+          case "${RUNNER_ARCH}" in
+            X64)
+              arch=amd64
+              expected_sha=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+              ;;
+            ARM64)
+              arch=arm64
+              expected_sha=325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6
+              ;;
+            *) echo "::error::Unsupported runner architecture: ${RUNNER_ARCH}"; exit 1 ;;
+          esac
+          filename="actionlint_${ACTIONLINT_VERSION}_linux_${arch}.tar.gz"
+          archive="${RUNNER_TEMP}/${filename}"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${filename}" \
+            --output "${archive}"
+          printf '%s  %s\n' "${expected_sha}" "${archive}" | sha256sum --check
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}" actionlint
+          # The previous pinned Docker image shipped both analyzers.
+          # Require them explicitly so moving to a native binary does not weaken checks.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends shellcheck python3-pyflakes
+          command -v shellcheck
+          /usr/bin/python3 -m pyflakes --version
+          # Ubuntu exposes Pyflakes as a module, not consistently as `pyflakes`.
+          printf '%s\n' '#!/bin/sh' 'exec /usr/bin/python3 -m pyflakes "$@"' > "${RUNNER_TEMP}/pyflakes"
+          chmod 0755 "${RUNNER_TEMP}/pyflakes"
+          export PATH="${RUNNER_TEMP}:${PATH}"
+          command -v pyflakes
+          "${RUNNER_TEMP}/actionlint" -color
