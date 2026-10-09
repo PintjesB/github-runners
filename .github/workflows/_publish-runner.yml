@@ -120,7 +120,7 @@ jobs:
             "${IMAGE}@${digest}" \
             --skip-network
       - name: Upload candidate digest
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ${{ inputs.profile }}-candidate-${{ matrix.tag_suffix }}
           path: ${{ runner.temp }}/candidate-digest.txt
@@ -144,12 +144,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Download amd64 digest
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ inputs.profile }}-candidate-amd64
           path: ${{ runner.temp }}/inputs/amd64
       - name: Download arm64 digest
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ inputs.profile }}-candidate-arm64
           path: ${{ runner.temp }}/inputs/arm64
@@ -287,7 +287,7 @@ jobs:
           printf '%s\n' "$merged" > "$RUNNER_TEMP/merged-digest.txt"
           echo "merged_digest=$merged" >> "$GITHUB_OUTPUT"
       - name: Upload merged digest
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ${{ inputs.profile }}-merged-digest
           path: ${{ runner.temp }}/merged-digest.txt
@@ -312,7 +312,7 @@ jobs:
       contents: read
     steps:
       - name: Download merged digest
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ inputs.profile }}-merged-digest
           path: ${{ runner.temp }}
@@ -353,7 +353,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Download merged digest
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ inputs.profile }}-merged-digest
           path: ${{ runner.temp }}
@@ -388,7 +388,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Download merged digest
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ inputs.profile }}-merged-digest
           path: ${{ runner.temp }}
