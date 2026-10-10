@@ -1,0 +1,43 @@
+name: artifact-transport-compat
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/_publish-runner.yml
+      - .github/workflows/artifact-transport-compat.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Prepare deterministic payload
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/payload"
+          printf 'artifact-transport-v7-v8\n' > "$RUNNER_TEMP/payload/candidate-digest.txt"
+      - name: Upload default archive artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: artifact-transport-compat
+          path: ${{ runner.temp }}/payload/candidate-digest.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  download:
+    needs: upload
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download and verify archive digest
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: artifact-transport-compat
+          path: ${{ runner.temp }}/received
+      - name: Verify artifact payload
+        shell: bash
+        run: |
+          test -f "$RUNNER_TEMP/received/candidate-digest.txt"
+          test "$(cat "$RUNNER_TEMP/received/candidate-digest.txt")" = "artifact-transport-v7-v8"
