@@ -17,7 +17,7 @@ env:
 jobs:
   changes:
     name: Classify runner changes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       profiles: ${{ steps.filter.outputs.profiles }}
       has_profiles: ${{ steps.filter.outputs.has_profiles }}
@@ -92,7 +92,7 @@ jobs:
     name: Validate ${{ matrix.profile }}
     needs: changes
     if: needs.changes.outputs.has_profiles == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -187,7 +187,7 @@ jobs:
       - changes
       - validate
       - native-images
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:

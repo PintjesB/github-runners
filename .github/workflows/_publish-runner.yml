@@ -17,7 +17,7 @@ permissions: {}
 jobs:
   contract:
     name: ${{ inputs.profile }} contract suite
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -130,7 +130,7 @@ jobs:
   merge:
     name: Merge and validate ${{ inputs.profile }} manifests
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
@@ -338,7 +338,7 @@ jobs:
   attest:
     name: Attest ${{ inputs.profile }} merged digest
     needs: verify
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
@@ -374,7 +374,7 @@ jobs:
   promote:
     name: Promote ${{ inputs.profile }} latest
     needs: attest
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write

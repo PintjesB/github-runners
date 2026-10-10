@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   upload:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Prepare deterministic payload
         shell: bash
@@ -29,7 +29,7 @@ jobs:
 
   download:
     needs: upload
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Download and verify archive digest
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
