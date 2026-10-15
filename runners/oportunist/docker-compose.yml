@@ -43,7 +43,7 @@ services:
   # Requires general-runner PR #61 merged and its image published before deployment.
   # The Docker socket is retained for existing docker-run actionlint jobs.
   runner-light:
-    image: ${OPORTUNIST_RUNNER_LIGHT_IMAGE:?${OPORTUNIST_RUNNER_LIGHT_IMAGE} must be a published general-runner image}
+    image: ${OPORTUNIST_RUNNER_LIGHT_IMAGE:?Set to a published general-runner image}
     profiles: [ci-light]
     container_name: oportunist-runner-light
     restart: always
