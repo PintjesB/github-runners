@@ -155,7 +155,7 @@ jobs:
           const classify = lines.slice(0, end < 0 ? undefined : end).map(line => line.replace(/^          /, '')).join('\n');
           const temp = fs.mkdtempSync(path.join(tmpdir(), 'renovate-policy-'));
           try {
-            for (const [file, expected] of [["runners/titan/evidence/requirements.txt", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/titan/tests/requirements.txt", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/titan/probe/package-lock.json", ["has_profiles=true", "profiles=[\"titan\"]"]], [".github/workflows/renovate-config.yml", ["has_profiles=false"]], [".github/workflows/_publish-runner.yml", ["has_profiles=true", "profiles=[\"titan\",\"oportunist\"]"]]]) {
+            for (const [file, expected] of [["runners/titan/evidence/requirements.txt", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/titan/tests/requirements.txt", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/titan/probe/package-lock.json", ["has_profiles=true", "profiles=[\"titan\"]"]], ["runners/general/Dockerfile", ["has_profiles=true", "profiles=[\"general\"]"]], [".github/workflows/renovate-config.yml", ["has_profiles=false"]], [".github/workflows/_publish-runner.yml", ["has_profiles=true", "profiles=[\"titan\",\"oportunist\",\"general\"]"]]]) {
               const output = path.join(temp, 'output');
               fs.writeFileSync(output, '');
               const run = spawnSync('bash', ['-c', `git() { if [ "$1" = diff ]; then printf '%s\n' "$CHANGED_FILES"; else command git "$@"; fi; }\n${classify}`], {

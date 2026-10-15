@@ -244,11 +244,12 @@
     }
   ],
   "customManagers": [
+
     {
       "customType": "regex",
-      "description": "Track the GitHub Actions runner version baked into both runner images",
+      "description": "Track the GitHub Actions runner version baked into all runner images",
       "managerFilePatterns": [
-        "/^runners\\/(?:oportunist|titan)\\/Dockerfile$/"
+        "/^runners\\/(?:general|oportunist|titan)\\/Dockerfile$/"
       ],
       "matchStrings": [
         "ARG RUNNER_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
