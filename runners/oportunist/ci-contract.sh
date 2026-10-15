@@ -12,7 +12,9 @@ docker compose --env-file .env.example --profile ci-light config --format json \
   | python3 -c 'import json,sys; light=json.load(sys.stdin)["services"]["runner-light"]; assert not any(v.get("type") == "bind" for v in light.get("volumes", [])); assert "docker info" not in str(light["healthcheck"])'
 python3 ../titan/tests/test_dependency_cache.py
 
-grep -q '@openai/codex' Dockerfile
+python3 ../titan/tests/test_dependency_cache.py
+
+! grep -q '@openai/codex' Dockerfile
 grep -q 'docker-compose-v2' Dockerfile
 grep -q 'docker-buildx' Dockerfile
 grep -q 'python3' Dockerfile
@@ -27,8 +29,6 @@ grep -q 'persisted runner registration is ephemeral/one-shot' scripts/register.s
 
 grep -q 'oportunist-runner-state' docker-compose.yml
 grep -q 'oportunist-runner-work' docker-compose.yml
-grep -q 'oportunist-runner-codex' docker-compose.yml
-grep -q 'CODEX_HOME: /home/runner/.codex' docker-compose.yml
 
 grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' VERSION
 

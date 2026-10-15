@@ -17,7 +17,7 @@
 # Probes (in order):
 #
 #   1. Required binaries: docker, docker compose, buildx, the
-#      ShellCheck binary, gh, git, bash, node, npm, codex, python3,
+#      ShellCheck binary, gh, git, bash, node, npm, python3,
 #      psql.
 #   2. Docker daemon reachability through the bind-mounted socket.
 #      The daemon's reported architecture MUST match ``EXPECTED_ARCH``
@@ -26,7 +26,6 @@
 #   3. Compose v2 plugin resolution (parses ``docker compose version``).
 #   4. Buildx availability (``docker buildx version``).
 #   5. Node.js 24 major version and npm presence.
-#   6. Pinned Codex CLI presence and version.
 #   7. Python 3.12+ interpreter.
 #   8. Playwright Chromium binary reachable at the documented
 #      ``PLAYWRIGHT_BROWSERS_PATH`` and able to launch a headless
@@ -117,16 +116,6 @@ probe_node() {
     major="$(node -e 'console.log(process.versions.node.split(".")[0])')"
     [ "$major" -eq 24 ] || fail "node major version must be 24 (got $major)"
     ok "node: v$(node --version)"
-}
-
-probe_codex() {
-    require_binary codex
-    local version
-    version="$(codex --version 2>&1)" || fail "codex CLI failed to report its version"
-    if [ -n "${CODEX_VERSION:-}" ] && ! printf '%s\n' "$version" | grep -Fq "$CODEX_VERSION"; then
-        fail "codex version does not match image pin (expected $CODEX_VERSION, got $version)"
-    fi
-    ok "codex: $version"
 }
 
 probe_python() {
@@ -228,7 +217,6 @@ probe_buildx
 probe_shellcheck
 probe_gh
 probe_node
-probe_codex
 probe_python
 probe_postgres_client
 require_binary envsubst

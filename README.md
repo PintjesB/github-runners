@@ -8,8 +8,8 @@ The repository is organized by runner profile. Each profile owns its image, Comp
 
 | Profile | Purpose | Image |
 | --- | --- | --- |
-| [`titan`](runners/titan/) | Titan Stocks CI, including Docker tooling, Python, PostgreSQL client, Playwright/Chromium, and Codex | `ghcr.io/pintjesb/titan-stocks-runner` |
-| [`oportunist`](runners/oportunist/) | Oportunist CI and Codex automation with a lean Python/Docker toolchain | `ghcr.io/pintjesb/oportunist-runner` |
+| [`titan`](runners/titan/) | Titan Stocks CI, including Docker tooling, Python, PostgreSQL client and Playwright/Chromium | `ghcr.io/pintjesb/titan-stocks-runner` |
+| [`oportunist`](runners/oportunist/) | Oportunist CI with a lean Python/Docker toolchain | `ghcr.io/pintjesb/oportunist-runner` |
 | [`general`](runners/general/) | Lightweight Ubuntu-based CI with Python, Node, Docker CLI and Compose | `ghcr.io/pintjesb/general-runner` |
 
 Additional profiles should be added under `runners/<name>/` rather than expanding every image with unrelated dependencies.
@@ -89,13 +89,12 @@ Deployment examples use explicit SemVer tags so Renovate can update them. `lates
 
 - Runner profiles are independently buildable, versioned, and deployable.
 - Profile-specific dependencies stay inside that profile.
-- Persistent runner identity, workspaces, and Codex authentication use Docker named volumes.
-- Codex authentication is replaceable state: if its volume is deleted, authenticate again with `codex login --device-auth`.
+- Persistent runner identity and workspaces use Docker named volumes.
 - Build, verification, merge, and attestation operate on immutable digests even though deployments may consume SemVer tags.
 - The dedicated CI VM is the security boundary for runners that receive the host Docker socket.
 
 ## Deployment migration
 
-Existing runner containers do not stop because this source repository was reorganized or renamed. However, update deployment Compose files before adopting Codex or refreshing image references. See [Compose migration after the runner repository split](docs/compose-migration.md).
+Existing runner containers do not stop because this source repository was reorganized or renamed. However, update deployment Compose files before refreshing image references. See [Compose migration after the runner repository split](docs/compose-migration.md).
 
 The repository has already been renamed to `PintjesB/github-runners`. GitHub redirects the old repository URL, while the GHCR image names intentionally remain unchanged.

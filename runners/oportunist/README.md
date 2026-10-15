@@ -13,7 +13,6 @@ Lean persistent self-hosted GitHub Actions runner for `PintjesB/oportunist`.
 - Git and GitHub CLI
 - Python 3.12 from Ubuntu 24.04
 - Node.js 24
-- OpenAI Codex CLI
 
 Titan-only PostgreSQL, Playwright, Chromium, browser-cache, and cleanup tooling are intentionally omitted.
 
@@ -42,19 +41,6 @@ If that volume contains an older ephemeral/one-shot registration, startup
 intentionally refuses to reuse it. Set a fresh `OPORTUNIST_RUNNER_TOKEN` and
 recreate the service once so GitHub replaces it with a persistent registration.
 
-## Codex authentication
-
-Codex authentication is intentionally stored in its own Docker volume, `oportunist-runner-codex`, mounted at `/home/runner/.codex`.
-
-Authenticate once after deployment:
-
-```bash
-docker compose exec --user runner runner codex login --device-auth
-docker compose exec --user runner runner codex login status
-```
-
-Normal container recreation and image upgrades keep the login. If `oportunist-runner-codex` is deleted, simply repeat the device login. The volume does not need to be backed up.
-
 ## Workflow label
 
 Oportunist workflows should target:
@@ -62,8 +48,6 @@ Oportunist workflows should target:
 ```yaml
 runs-on: [self-hosted, linux, oportunist-ci]
 ```
-
-The additional `codex` label allows Codex-specific jobs to select this runner explicitly if desired.
 
 ## CI evidence client
 

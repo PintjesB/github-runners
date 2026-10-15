@@ -47,9 +47,6 @@
 #   3. The capability probe's Playwright version is owned by
 #      ``probe/package.json`` and its lockfile so Renovate updates
 #      one canonical dependency source.
-#   4. ``CODEX_VERSION`` pins the Codex CLI used by autonomous
-#      workflows. Refresh it deliberately so image publication and
-#      the native capability probe validate the exact CLI version.
 #
 # The image runs as a non-root ``runner`` user. The Docker socket
 # is bind-mounted read/write by the persistent Compose configuration
@@ -64,15 +61,12 @@ ARG TARGETARCH
 ARG RUNNER_VERSION=2.336.0
 ARG RUNNER_SHA256_ARM64=58b758e420b87093fbd4bfddd368074960053e2f1388f01848c82624b90f27d1
 ARG RUNNER_SHA256_X64=04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d
-ARG CODEX_VERSION=0.162.1
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     RUNNER_VERSION=${RUNNER_VERSION} \
     RUNNER_SHA256_ARM64=${RUNNER_SHA256_ARM64} \
     RUNNER_SHA256_X64=${RUNNER_SHA256_X64} \
-    CODEX_VERSION=${CODEX_VERSION} \
-    CODEX_HOME=/home/runner/.codex \
     # The image installs Node via NodeSource; declaring the major
     # here keeps the Docker layer cache stable across rebuilds that
     # only refresh the runner or probe dependencies.
@@ -169,15 +163,6 @@ RUN install -d -m 0755 /etc/apt/keyrings \
  && node --version \
  && npm --version
 
-# Install a pinned Codex CLI globally. Authentication is intentionally
-# NOT baked into the image; Compose mounts a dedicated named volume at
-# ``CODEX_HOME`` and operators perform the ChatGPT device login once
-# after deployment. The same image therefore remains safe to publish
-# publicly while the replaceable login state stays local to the CI VM.
-RUN npm install -g --no-audit --no-fund "@openai/codex@${CODEX_VERSION}" \
- && codex --version \
- && npm cache clean --force
-
 # Install the GitHub CLI from the official apt repository. The CI
 # host uses ``gh`` for the runner-smoke capability probe and for
 # occasional diagnostic invocations against the API.
@@ -209,7 +194,7 @@ RUN apt-get update \
 # ``runner``.
 #
 # The home directory hosts the canonical Actions runner checkout,
-# the ``_work`` job workspace, the Codex login directory, and the
+# the ``_work`` job workspace, and the
 # Playwright ``.cache`` for browser binaries. Persistent volumes
 # overlay the mutable directories in production.
 RUN groupadd --system --gid 1001 runner \
@@ -219,7 +204,6 @@ RUN groupadd --system --gid 1001 runner \
         --comment "Titan Stocks CI runner" \
         runner \
  && mkdir -p /home/runner/.cache/ms-playwright \
-             /home/runner/.codex \
              /home/runner/actions-runner \
              /home/runner/.local/bin \
              /var/lib/titan-runner/{state,work,browser} \

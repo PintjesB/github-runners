@@ -22,7 +22,6 @@ services:
       npm_config_cache: /var/lib/titan-runner/cache/npm
       RUNNER_BROWSER_DIR: ${TITAN_RUNNER_BROWSER_DIR:-/var/lib/titan-runner/browser}
       RUNNER_ROOT: ${TITAN_RUNNER_ROOT:-/opt/actions-runner}
-      CODEX_HOME: /home/runner/.codex
       # The startup entrypoint consumes this token during registration,
       # unsets it, and then execs the persistent listener.
       RUNNER_TOKEN: ${TITAN_RUNNER_TOKEN:-}
@@ -35,8 +34,6 @@ services:
       - titan-runner-work:/var/lib/titan-runner/work
       - titan-runner-cache:/var/lib/titan-runner/cache
       - titan-runner-browser:/var/lib/titan-runner/browser
-      # ChatGPT/Codex login state. Deleting this volume only requires re-login.
-      - titan-runner-codex:/home/runner/.codex
     healthcheck:
       test:
         - CMD-SHELL
@@ -107,8 +104,6 @@ volumes:
     name: titan-runner-work
   titan-runner-browser:
     name: titan-runner-browser
-  titan-runner-codex:
-    name: titan-runner-codex
   titan-runner-cache:
     name: titan-runner-cache
   titan-runner-light-state:
@@ -117,3 +112,5 @@ volumes:
     name: titan-runner-light-work
   titan-runner-light-cache:
     name: titan-runner-light-cache
+  titan-runner-light-browser:
+    name: titan-runner-light-browser
