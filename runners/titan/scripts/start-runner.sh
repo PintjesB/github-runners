@@ -39,11 +39,6 @@
 #                              on startup when an image-required revision
 #                              is missing; existing revisions are preserved.
 #
-#   /home/runner/.codex        Persistent ``titan-runner-codex``
-#                              named volume. Holds replaceable Codex
-#                              authentication state. Losing this volume
-#                              only requires another device login.
-#
 #   /opt/titan-probe/node_modules  Image-owned ``playwright-core``
 #                              dependency tree. The capability probe
 #                              resolves ``NODE_PATH`` onto this
@@ -61,8 +56,7 @@
 #   3. Grants the host Docker socket's GID to the runner user as a
 #      *supplemental* group; the primary ``runner`` group is
 #      preserved.
-#   4. Ensures all persistent directories, including ``CODEX_HOME``,
-#      are owned by the non-root ``runner`` user.
+#   4. Ensures all persistent directories are owned by the non-root ``runner`` user.
 #   5. Rebuilds the runtime tree from ``/opt/actions-runner`` and
 #      overlays the persisted registration files onto it.
 #   6. Seeds the persistent browser volume from the baked image
@@ -89,8 +83,6 @@
 #                       ``/home/runner/.cache/ms-playwright``.
 #   RUNNER_ROOT         Image-owned source tree. Default
 #                       ``/opt/actions-runner``.
-#   CODEX_HOME          Persistent Codex configuration/auth path.
-#                       Default ``/home/runner/.codex``.
 #   RUNNER_TOKEN        Short-lived GitHub registration token. It is
 #                       consumed by ``register`` and unset before the
 #                       listener process starts.
@@ -118,10 +110,9 @@ RUNNER_WORK_DIR="${RUNNER_WORK_DIR:-/var/lib/titan-runner/work}"
 RUNNER_BROWSER_DIR="${RUNNER_BROWSER_DIR:-/var/lib/titan-runner/browser}"
 RUNNER_BROWSER_SEED="${RUNNER_BROWSER_SEED:-/home/runner/.cache/ms-playwright}"
 RUNNER_ROOT="${RUNNER_ROOT:-/opt/actions-runner}"
-CODEX_HOME="${CODEX_HOME:-/home/runner/.codex}"
 PIP_CACHE_DIR="${PIP_CACHE_DIR:-/var/lib/titan-runner/cache/pip}"
 npm_config_cache="${npm_config_cache:-/var/lib/titan-runner/cache/npm}"
-export CODEX_HOME PIP_CACHE_DIR npm_config_cache
+export PIP_CACHE_DIR npm_config_cache
 
 # The Compose service is the only long-lived container. Registration is
 # an internal startup phase, and these traps ensure the short-lived
@@ -170,19 +161,13 @@ else
     log "warning: $DOCKER_SOCKET is not a socket; Docker CLI calls will fail inside the runner"
 fi
 
-# Ensure the persistent directories exist and are owned by runner. The
-# Codex named volume may be brand new after deployment or after an
-# operator deliberately removes it, so ownership is repaired on every
-# container start before any workflow can invoke ``codex``.
 install -d -m 0750 -o runner -g runner \
     "$RUNNER_STATE_DIR" \
     "$RUNNER_RUNTIME_DIR" \
     "$RUNNER_WORK_DIR" \
     "$RUNNER_BROWSER_DIR" \
     "$PIP_CACHE_DIR" \
-    "$npm_config_cache" \
-    "$CODEX_HOME"
-chown -R runner:runner "$CODEX_HOME"
+    "$npm_config_cache"
 
 # Rebuild the runtime tree from the immutable image tree. The runner
 # reads ``.runner`` and ``.credentials*`` from ``$HOME`` at startup,
@@ -260,7 +245,6 @@ log "launching persistent listener; foreground logs follow"
 if ! env \
         HOME="$RUNNER_RUNTIME_DIR" \
         PLAYWRIGHT_BROWSERS_PATH="$RUNNER_BROWSER_DIR" \
-        CODEX_HOME="$CODEX_HOME" \
         gosu runner \
         "$RUNNER_RUNTIME_DIR/run.sh"; then
     fail "listener exited non-zero" 4

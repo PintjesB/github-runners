@@ -98,10 +98,8 @@ jobs:
           for (const pkg of ['postgres','redis','ghcr.io/example/postgres','mcr.microsoft.com/mssql/server','unreviewed/image']) {
             for (const update of [...routine,'major']) add('dockerfile', pkg, update, false, 'Dockerfile');
           }
-          for (const pkg of ["@openai/codex", "actions/runner"]) {
-            for (const update of [...routine,'major']) add(['@openai/codex','chromatic'].includes(pkg) ? 'npm' : 'custom.regex',
-              pkg, update, false, "runners/titan/probe/package.json", '1.2.3', ['@openai/codex','chromatic'].includes(pkg) ? 'npm' : 'github-releases');
-          }
+          for (const update of [...routine,'major'])
+            add('custom.regex', 'actions/runner', update, false, 'runners/titan/Dockerfile', '2.336.0', 'github-releases');
           add('unknown-manager', 'unknown/package', 'patch', false, 'unknown');
           add('npm', 'patchright', 'minor', false, 'uncovered/package.json');
           add('pip_requirements', 'redis', 'patch', false, 'uncovered/requirements.txt');

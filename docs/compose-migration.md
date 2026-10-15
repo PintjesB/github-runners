@@ -4,21 +4,9 @@ The repository move to `runners/titan/` and `runners/oportunist/` does not by it
 
 ## Titan
 
-An existing Titan Compose deployment can keep running while you schedule the migration. Update it before using Codex or before the next normal image refresh.
+An existing Titan Compose deployment can keep running while you schedule the migration. Update it before the next normal image refresh.
 
-Use the current files from `runners/titan/` as the source of truth. In particular, the current Compose model adds:
-
-```yaml
-environment:
-  CODEX_HOME: /home/runner/.codex
-
-volumes:
-  - titan-runner-codex:/home/runner/.codex
-
-volumes:
-  titan-runner-codex:
-    name: titan-runner-codex
-```
+Use the current files from `runners/titan/` as the source of truth.
 
 The existing `titan-runner-state`, `titan-runner-work`, and `titan-runner-browser` volume names are unchanged, so adopting the current Compose file reuses the existing GitHub registration, workspace, and browser cache.
 
@@ -30,23 +18,12 @@ TITAN_RUNNER_IMAGE=ghcr.io/pintjesb/titan-stocks-runner:1.0.0
 
 This keeps deployments predictable while allowing Renovate to propose image upgrades automatically. If the deployment uses `:latest`, run `docker compose pull` before recreating the runner; `latest` moving in GHCR does not restart a running container by itself.
 
-After deployment, authenticate Codex once:
-
-```bash
-cd runners/titan
-docker compose exec --user runner runner codex login --device-auth
-docker compose exec --user runner runner codex login status
-```
-
-Deleting `titan-runner-codex` only removes Codex authentication. Recreate the runner and repeat the device login.
-
 ## Oportunist
 
 Use `runners/oportunist/docker-compose.yml` rather than adapting the Titan Compose file. Its persistent state is intentionally separate:
 
 - `oportunist-runner-state`
 - `oportunist-runner-work`
-- `oportunist-runner-codex`
 
 Use the profile's explicit SemVer image tag so Renovate can track upgrades:
 
@@ -55,14 +32,6 @@ OPORTUNIST_RUNNER_IMAGE=ghcr.io/pintjesb/oportunist-runner:1.0.0
 ```
 
 After first registration, clear `OPORTUNIST_RUNNER_TOKEN` from `.env` and recreate the container so the short-lived token is no longer present in Docker's stored container environment metadata.
-
-Authenticate Codex once with:
-
-```bash
-cd runners/oportunist
-docker compose exec --user runner runner codex login --device-auth
-docker compose exec --user runner runner codex login status
-```
 
 ## Versioning
 

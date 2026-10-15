@@ -28,7 +28,7 @@ Five rules apply:
 
 * **One repository trust boundary per VM.** Keep one heavy listener.
   The opt-in light listener may run concurrently only for the same trusted repository,
-  with separate state/work/cache/browser/Codex volumes and light-only labels.
+  with separate state/work/cache/browser volumes and light-only labels.
   Its cleanup hooks are disabled to protect the active heavy job. A listener
   for another repository requires a separate VM. Separate volumes protect
   normal operation; direct Docker socket access does not isolate a compromised

@@ -10,10 +10,8 @@
 #   * The workspace is the explicit ``titan-runner-work`` named volume
 #     mounted at the fixed internal path; the Docker socket is the only
 #     host bind mount.
-#   * Codex authentication uses the explicit ``titan-runner-codex``
-#     named volume mounted at ``/home/runner/.codex``.
 #   * Persistent ``titan-runner-state``, ``titan-runner-work``,
-#     ``titan-runner-browser``, and ``titan-runner-codex`` named
+#     ``titan-runner-browser`` named
 #     volumes are declared explicitly.
 #
 # A regression that drops any of these surfaces blocks the
@@ -122,11 +120,6 @@ def _validate(resolved: dict | None, raw: dict) -> None:
             "docker-compose.yml runner environment must pass RUNNER_TOKEN "
             "to the startup registration phase"
         )
-    if environment.get("CODEX_HOME") != "/home/runner/.codex":
-        _fail(
-            "docker-compose.yml runner environment must set CODEX_HOME "
-            "to /home/runner/.codex"
-        )
 
     # The workspace MUST be the named volume mounted at the fixed path.
     # Compose resolves the short YAML form to a type=volume mapping.
@@ -149,28 +142,6 @@ def _validate(resolved: dict | None, raw: dict) -> None:
         _fail(
             "docker-compose.yml `runner` service must mount the named "
             "`titan-runner-work` volume at /var/lib/titan-runner/work"
-        )
-
-    # Codex login state is deliberately persisted in its own replaceable
-    # volume. The image contains the CLI, never the user's ChatGPT auth.
-    codex_mounts = [
-        mount
-        for mount in mounts
-        if isinstance(mount, dict)
-        and mount.get("type") == "volume"
-        and mount.get("source") == "titan-runner-codex"
-        and mount.get("target") == "/home/runner/.codex"
-    ]
-    if resolved is None:
-        codex_mounts = [
-            mount
-            for mount in mounts
-            if mount == "titan-runner-codex:/home/runner/.codex"
-        ]
-    if not codex_mounts:
-        _fail(
-            "docker-compose.yml `runner` service must mount the named "
-            "`titan-runner-codex` volume at /home/runner/.codex"
         )
 
     # The socket is intentionally the only host bind mount.
@@ -209,7 +180,6 @@ def _validate(resolved: dict | None, raw: dict) -> None:
         "titan-runner-state",
         "titan-runner-work",
         "titan-runner-browser",
-        "titan-runner-codex",
     ):
         definition = volumes.get(volume_name)
         if not isinstance(definition, dict):

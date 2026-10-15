@@ -4,7 +4,7 @@ Each profile keeps one heavy listener and offers a second, optional listener
 for `workflow-lint` and `renovate-config`. The heavy labels remain `titan-ci`
 and `oportunist-ci`; the light labels are `titan-ci-light` and
 `oportunist-ci-light`. Each light listener is limited to one CPU and 2 GiB RAM.
-It has its own registration identity and state/work/cache/Codex volumes. Titan
+It has its own registration identity and state/work/cache volumes. Titan
 also isolates its browser volume. No login is required for the light listener.
 Both listeners have host Docker socket access, including substantial host
 privileges, so they are for the same trusted repository as their heavy listener.
