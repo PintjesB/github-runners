@@ -40,26 +40,45 @@ services:
     networks:
       - oportunist-runner-net
 
-  # Activate explicitly after registering the independent light listener.
+  # Requires general-runner PR #61 merged and its image published before deployment.
+  # The Docker socket is retained for existing docker-run actionlint jobs.
   runner-light:
-    extends:
-      service: runner
+    image: ${OPORTUNIST_RUNNER_LIGHT_IMAGE:?${OPORTUNIST_RUNNER_LIGHT_IMAGE} must be a published general-runner image}
     profiles: [ci-light]
     container_name: oportunist-runner-light
+    restart: always
     cpus: 1
     mem_limit: 2g
+    security_opt:
+      - no-new-privileges:true
+    privileged: false
     environment:
-      RUNNER_STATE_DIR: /var/lib/oportunist-runner/state
-      RUNNER_RUNTIME_DIR: /var/lib/oportunist-runner/runtime
+      REPO_URL: ${OPORTUNIST_RUNNER_REPO_URL:-https://github.com/PintjesB/oportunist}
       RUNNER_NAME: ${OPORTUNIST_RUNNER_LIGHT_NAME:-oportunist-ci-light}
       RUNNER_LABELS: oportunist-ci-light
       RUNNER_TOKEN: ${OPORTUNIST_RUNNER_LIGHT_TOKEN:-}
+      # Reuse original registration/work/cache directories for a no-token migration.
+      RUNNER_STATE_DIR: /var/lib/oportunist-runner/state
+      RUNNER_RUNTIME_DIR: /var/lib/oportunist-runner/runtime
+      RUNNER_WORK_DIR: /var/lib/oportunist-runner/work
+      PIP_CACHE_DIR: /var/lib/oportunist-runner/cache/pip
+      npm_config_cache: /var/lib/oportunist-runner/cache/npm
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - oportunist-runner-light-state:/var/lib/oportunist-runner/state
       - oportunist-runner-light-work:/var/lib/oportunist-runner/work
       - oportunist-runner-light-cache:/var/lib/oportunist-runner/cache
-      - oportunist-runner-light-codex:/home/runner/.codex
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pgrep -u runner -f 'Runner.Listener' >/dev/null && gosu runner docker info >/dev/null 2>&1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+    stop_grace_period: 30s
+    networks:
+      - oportunist-runner-net
 
 networks:
   oportunist-runner-net:
@@ -81,5 +100,3 @@ volumes:
     name: oportunist-runner-light-work
   oportunist-runner-light-cache:
     name: oportunist-runner-light-cache
-  oportunist-runner-light-codex:
-    name: oportunist-runner-light-codex

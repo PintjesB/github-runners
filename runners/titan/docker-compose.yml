@@ -53,21 +53,30 @@ services:
     networks:
       - titan-runner-net
 
-  # Activate explicitly after registering the independent light listener.
+  # Requires general-runner PR #61 merged and its image published before deployment.
+  # The Docker socket is retained for existing docker-run actionlint jobs.
   runner-light:
-    extends:
-      service: runner
+    image: ${TITAN_RUNNER_LIGHT_IMAGE:?${TITAN_RUNNER_LIGHT_IMAGE} must be a published general-runner image}
     profiles: [ci-light]
     container_name: titan-runner-light
+    restart: always
     cpus: 1
     mem_limit: 2g
+    security_opt:
+      - no-new-privileges:true
+    privileged: false
     environment:
-      RUNNER_STATE_DIR: /var/lib/titan-runner/state
-      RUNNER_RUNTIME_DIR: /var/lib/titan-runner/runtime
+      REPO_URL: ${TITAN_RUNNER_REPO_URL:?TITAN_RUNNER_REPO_URL is required}
       RUNNER_NAME: ${TITAN_RUNNER_LIGHT_NAME:-titan-ci-light}
       RUNNER_LABELS: titan-ci-light
       RUNNER_TOKEN: ${TITAN_RUNNER_LIGHT_TOKEN:-}
-      # Light-job completion must never clean up an active heavy-job stack.
+      # Reuse original registration/work/cache directories for a no-token migration.
+      RUNNER_STATE_DIR: /var/lib/titan-runner/state
+      RUNNER_RUNTIME_DIR: /var/lib/titan-runner/runtime
+      RUNNER_WORK_DIR: /var/lib/titan-runner/work
+      PIP_CACHE_DIR: /var/lib/titan-runner/cache/pip
+      npm_config_cache: /var/lib/titan-runner/cache/npm
+      # Never run heavy-runner hooks from this lightweight listener.
       ACTIONS_RUNNER_HOOK_JOB_STARTED: ""
       ACTIONS_RUNNER_HOOK_JOB_COMPLETED: ""
     volumes:
@@ -75,8 +84,17 @@ services:
       - titan-runner-light-state:/var/lib/titan-runner/state
       - titan-runner-light-work:/var/lib/titan-runner/work
       - titan-runner-light-cache:/var/lib/titan-runner/cache
-      - titan-runner-light-browser:/var/lib/titan-runner/browser
-      - titan-runner-light-codex:/home/runner/.codex
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pgrep -u runner -f 'Runner.Listener' >/dev/null && gosu runner docker info >/dev/null 2>&1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+    stop_grace_period: 30s
+    networks:
+      - titan-runner-net
 
 networks:
   titan-runner-net:
@@ -100,7 +118,3 @@ volumes:
     name: titan-runner-light-work
   titan-runner-light-cache:
     name: titan-runner-light-cache
-  titan-runner-light-codex:
-    name: titan-runner-light-codex
-  titan-runner-light-browser:
-    name: titan-runner-light-browser
