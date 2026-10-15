@@ -9,7 +9,7 @@ done < <(find scripts -type f -name '*.sh' -print)
 docker compose --env-file .env.example config >/dev/null
 python3 ../titan/tests/test_dependency_cache.py
 
-grep -q '@openai/codex' Dockerfile
+! grep -q '@openai/codex' Dockerfile
 grep -q 'docker-compose-v2' Dockerfile
 grep -q 'docker-buildx' Dockerfile
 grep -q 'python3' Dockerfile
@@ -24,8 +24,6 @@ grep -q 'persisted runner registration is ephemeral/one-shot' scripts/register.s
 
 grep -q 'oportunist-runner-state' docker-compose.yml
 grep -q 'oportunist-runner-work' docker-compose.yml
-grep -q 'oportunist-runner-codex' docker-compose.yml
-grep -q 'CODEX_HOME: /home/runner/.codex' docker-compose.yml
 
 grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' VERSION
 

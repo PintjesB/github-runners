@@ -22,7 +22,6 @@ python3 tests/test_browser_cache.py
 # now lives in test_publish_titan_contract.py.
 python3 -m pytest tests/test_runner_contract.py -v \
     -k 'not test_publish and not test_workflow_files_parse_and_have_no_executable_fixed_host_ports'
-python3 -m pytest tests/test_codex_contract.py -v
 python3 -m pytest tests/test_publish_titan_contract.py -v
 python3 tests/check_compose_contract.py
 

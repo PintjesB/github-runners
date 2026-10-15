@@ -8,7 +8,7 @@ fail() { printf '  FAIL %s\n' "$*" >&2; exit 1; }
 
 titan-evidence --help >/dev/null
 
-for binary in docker gh git bash node npm python3 codex lsb_release; do
+for binary in docker gh git bash node npm python3 lsb_release; do
     command -v "$binary" >/dev/null 2>&1 || fail "missing binary: $binary"
     ok "binary: $binary"
 done
@@ -42,10 +42,6 @@ ok "python venv and pip available"
 node_major="$(node -p 'process.versions.node.split(".")[0]')"
 [ "$node_major" = 24 ] || fail "Node 24 required, got $(node --version)"
 ok "node: $(node --version)"
-
-codex_version="$(codex --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
-[ "$codex_version" = "${CODEX_VERSION:-0.147.0}" ] || fail "Codex version mismatch: $codex_version"
-ok "codex: $codex_version"
 
 getent hosts host.docker.internal >/dev/null 2>&1 || fail "host.docker.internal does not resolve"
 ok "host gateway alias resolves"

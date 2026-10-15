@@ -11,7 +11,7 @@
 #     The runner's own ``titan-runner`` container is left alone.
 #   * The shared Playwright browser volume and the persistent
 #     ``titan-runner-state``, ``titan-runner-work``,
-#     ``titan-runner-browser``, and ``titan-runner-codex`` volumes
+#     ``titan-runner-browser`` volumes
 #     are NEVER touched. ``docker compose down -v`` removes only
 #     volumes owned by the matching child project; the external
 #     runner volumes are excluded by construction.
@@ -25,7 +25,7 @@
 #     any non-Titan checkout, any application development volume,
 #     and any unrelated workspace is left alone. The runner-owned
 #     named volumes titan-runner-state, titan-runner-work,
-#     titan-runner-browser, and titan-runner-codex are protected
+#     titan-runner-browser are protected
 #     storage and are never removed by this hook.
 #
 # The hook is intentionally permissive on failure: a cleanup error
@@ -53,7 +53,7 @@ remove_titan_compose_projects() {
     # down -v`` removes the project's containers, its bridge
     # network, and its project-owned volumes; external volumes are
     # left alone, so titan-runner-state, titan-runner-work,
-    # titan-runner-browser, titan-runner-codex, and application
+    # titan-runner-browser, and application
     # development volumes are never affected.
     local projects
     projects="$(docker ps -a --filter label="$compose_project_label" \
@@ -79,7 +79,7 @@ remove_titan_volumes() {
     # prefix. Only anonymous volumes whose owning container
     # carries the documented label are removed. Named volumes
     # (such as ``titan-runner-state``, ``titan-runner-work``,
-    # ``titan-runner-browser``, ``titan-runner-codex``, and any
+    # ``titan-runner-browser``, and any
     # application development volume) are excluded by construction.
     local volumes
     volumes="$(docker ps -a --filter label="$compose_project_label" \
@@ -94,7 +94,7 @@ remove_titan_volumes() {
     local volume
     for volume in $volumes; do
         case "$volume" in
-            titan-runner-state|titan-runner-work|titan-runner-browser|titan-runner-codex)
+            titan-runner-state|titan-runner-work|titan-runner-browser)
                 log "leaving protected runner volume untouched: $volume"
                 continue
                 ;;

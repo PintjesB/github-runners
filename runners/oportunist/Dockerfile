@@ -8,7 +8,6 @@ ARG TARGETARCH
 ARG RUNNER_VERSION=2.336.0
 ARG RUNNER_SHA256_ARM64=58b758e420b87093fbd4bfddd368074960053e2f1388f01848c82624b90f27d1
 ARG RUNNER_SHA256_X64=04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d
-ARG CODEX_VERSION=0.162.1
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
@@ -16,9 +15,7 @@ ENV LANG=C.UTF-8 \
     RUNNER_ROOT=/opt/actions-runner \
     RUNNER_VERSION=${RUNNER_VERSION} \
     RUNNER_SHA256_ARM64=${RUNNER_SHA256_ARM64} \
-    RUNNER_SHA256_X64=${RUNNER_SHA256_X64} \
-    CODEX_VERSION=${CODEX_VERSION} \
-    CODEX_HOME=/home/runner/.codex
+    RUNNER_SHA256_X64=${RUNNER_SHA256_X64}
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -51,11 +48,8 @@ RUN groupadd --system --gid 1001 runner \
  && useradd --system --uid 1001 --gid 1001 \
       --home-dir /home/runner --shell /bin/bash \
       --comment "Oportunist GitHub Actions runner" runner \
- && mkdir -p /home/runner/.codex /var/lib/oportunist-runner/{state,runtime,work} \
+ && mkdir -p /var/lib/oportunist-runner/{state,runtime,work} \
  && chown -R runner:runner /home/runner /var/lib/oportunist-runner
-
-RUN npm install -g "@openai/codex@${CODEX_VERSION}" \
- && codex --version
 
 COPY --chown=root:root scripts/titan-evidence /usr/local/bin/titan-evidence
 RUN chmod 0755 /usr/local/bin/titan-evidence
@@ -71,7 +65,7 @@ COPY --chown=root:root scripts/probe.sh /usr/local/bin/probe
 RUN chmod 0755 /usr/local/bin/register /usr/local/bin/start-runner /usr/local/bin/probe
 
 LABEL org.opencontainers.image.title="oportunist-runner" \
-      org.opencontainers.image.description="Lean persistent GitHub Actions and Codex runner for Oportunist" \
+      org.opencontainers.image.description="Persistent GitHub Actions runner for Oportunist" \
       org.opencontainers.image.vendor="PintjesB"
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/start-runner"]
