@@ -1,0 +1,40 @@
+name: publish-general
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'runners/general/**'
+      - '.github/workflows/_publish-runner.yml'
+      - '.github/workflows/_tag-semver.yml'
+      - '.github/workflows/publish-general.yml'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publish-general-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: ./.github/workflows/_publish-runner.yml
+    with:
+      profile: general
+      image: ghcr.io/pintjesb/general-runner
+
+  version:
+    needs: publish
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_tag-semver.yml
+    with:
+      profile: general
+      image: ghcr.io/pintjesb/general-runner

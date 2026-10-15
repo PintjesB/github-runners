@@ -109,12 +109,16 @@ jobs:
         run: |
           set -euo pipefail
           digest="$(tr -d '[:space:]' < "$RUNNER_TEMP/candidate-digest.txt")"
+          socket_args=()
+          if [ "${{ inputs.profile }}" != general ]; then
+            socket_args+=(-v /var/run/docker.sock:/var/run/docker.sock)
+          fi
           docker run --rm --platform "${{ matrix.platform }}" \
             --entrypoint /usr/local/bin/probe \
             --security-opt no-new-privileges:true \
             --add-host host.docker.internal:host-gateway \
             --shm-size 2gb \
-            -v /var/run/docker.sock:/var/run/docker.sock \
+            "${socket_args[@]}" \
             -e HOME=/tmp \
             -e EXPECTED_ARCH="$EXPECTED_ARCH" \
             "${IMAGE}@${digest}" \
@@ -324,12 +328,16 @@ jobs:
           set -euo pipefail
           digest="$(tr -d '[:space:]' < "$RUNNER_TEMP/merged-digest.txt")"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
+          socket_args=()
+          if [ "${{ inputs.profile }}" != general ]; then
+            socket_args+=(-v /var/run/docker.sock:/var/run/docker.sock)
+          fi
           docker run --rm --platform "${{ matrix.platform }}" \
             --entrypoint /usr/local/bin/probe \
             --security-opt no-new-privileges:true \
             --add-host host.docker.internal:host-gateway \
             --shm-size 2gb \
-            -v /var/run/docker.sock:/var/run/docker.sock \
+            "${socket_args[@]}" \
             -e HOME=/tmp \
             -e EXPECTED_ARCH="$EXPECTED_ARCH" \
             "${IMAGE}@${digest}" \

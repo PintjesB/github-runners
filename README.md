@@ -10,6 +10,7 @@ The repository is organized by runner profile. Each profile owns its image, Comp
 | --- | --- | --- |
 | [`titan`](runners/titan/) | Titan Stocks CI, including Docker tooling, Python, PostgreSQL client, Playwright/Chromium, and Codex | `ghcr.io/pintjesb/titan-stocks-runner` |
 | [`oportunist`](runners/oportunist/) | Oportunist CI and Codex automation with a lean Python/Docker toolchain | `ghcr.io/pintjesb/oportunist-runner` |
+| [`general`](runners/general/) | Lightweight Ubuntu-based CI with Python, Node, Docker CLI and Compose | `ghcr.io/pintjesb/general-runner` |
 
 Additional profiles should be added under `runners/<name>/` rather than expanding every image with unrelated dependencies.
 
@@ -26,6 +27,12 @@ runners/
     scripts/
     tests/
     docs/
+  general/
+    VERSION
+    Dockerfile
+    docker-compose.yml
+    ci-contract.sh
+    scripts/
   oportunist/
     VERSION
     Dockerfile
