@@ -7,6 +7,11 @@ while IFS= read -r script; do
 done < <(find scripts -type f -name '*.sh' -print)
 
 docker compose --env-file .env.example config >/dev/null
+# General-purpose light listener must not inherit privileged Docker binds.
+docker compose --env-file .env.example --profile ci-light config --format json \
+  | python3 -c 'import json,sys; light=json.load(sys.stdin)["services"]["runner-light"]; assert not any(v.get("type") == "bind" for v in light.get("volumes", [])); assert "docker info" not in str(light["healthcheck"])'
+python3 ../titan/tests/test_dependency_cache.py
+
 python3 ../titan/tests/test_dependency_cache.py
 
 ! grep -q '@openai/codex' Dockerfile

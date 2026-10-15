@@ -50,29 +50,47 @@ services:
     networks:
       - titan-runner-net
 
-  # Activate explicitly after registering the independent light listener.
+  # Requires general-runner PR #61 merged and its image published before deployment.
+  # Requires Titan #294 and Oportunist #166 (native actionlint) merged first.
   runner-light:
-    extends:
-      service: runner
+    image: ${TITAN_RUNNER_LIGHT_IMAGE:-ghcr.io/pintjesb/general-runner:1.0.0}
     profiles: [ci-light]
     container_name: titan-runner-light
+    restart: always
     cpus: 1
     mem_limit: 2g
+    security_opt:
+      - no-new-privileges:true
+    privileged: false
     environment:
-      RUNNER_STATE_DIR: /var/lib/titan-runner/state
-      RUNNER_RUNTIME_DIR: /var/lib/titan-runner/runtime
+      REPO_URL: ${TITAN_RUNNER_REPO_URL:?TITAN_RUNNER_REPO_URL is required}
       RUNNER_NAME: ${TITAN_RUNNER_LIGHT_NAME:-titan-ci-light}
       RUNNER_LABELS: titan-ci-light
       RUNNER_TOKEN: ${TITAN_RUNNER_LIGHT_TOKEN:-}
-      # Light-job completion must never clean up an active heavy-job stack.
+      # Reuse original registration/work/cache directories for a no-token migration.
+      RUNNER_STATE_DIR: /var/lib/titan-runner/state
+      RUNNER_RUNTIME_DIR: /var/lib/titan-runner/runtime
+      RUNNER_WORK_DIR: /var/lib/titan-runner/work
+      PIP_CACHE_DIR: /var/lib/titan-runner/cache/pip
+      npm_config_cache: /var/lib/titan-runner/cache/npm
+      # Never run heavy-runner hooks from this lightweight listener.
       ACTIONS_RUNNER_HOOK_JOB_STARTED: ""
       ACTIONS_RUNNER_HOOK_JOB_COMPLETED: ""
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - titan-runner-light-state:/var/lib/titan-runner/state
       - titan-runner-light-work:/var/lib/titan-runner/work
       - titan-runner-light-cache:/var/lib/titan-runner/cache
-      - titan-runner-light-browser:/var/lib/titan-runner/browser
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pgrep -u runner -f 'Runner.Listener' >/dev/null
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+    stop_grace_period: 30s
+    networks:
+      - titan-runner-net
 
 networks:
   titan-runner-net:
