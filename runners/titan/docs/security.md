@@ -30,9 +30,9 @@ Five rules apply:
   The opt-in light listener may run concurrently only for the same trusted repository,
   with separate state/work/cache volumes and light-only labels.
   Its cleanup hooks are disabled to protect the active heavy job. A listener
-  for another repository requires a separate VM. Separate volumes protect
-  normal operation; direct Docker socket access does not isolate a compromised
-  listener from its sibling or the VM.
+  for another repository requires a separate VM. Only the heavy listener has
+  Docker socket access; the general-purpose light listener has no host binds.
+  Separate volumes alone do not establish a security boundary.
 * **No production data on the VM.** The VM MUST NOT store
   production databases, application secrets, deployment
   credentials, customer data, or any workload that is unrelated

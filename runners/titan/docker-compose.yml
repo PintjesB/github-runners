@@ -54,7 +54,7 @@ services:
       - titan-runner-net
 
   # Requires general-runner PR #61 merged and its image published before deployment.
-  # The Docker socket is retained for existing docker-run actionlint jobs.
+  # Requires Titan #294 and Oportunist #166 (native actionlint) merged first.
   runner-light:
     image: ${TITAN_RUNNER_LIGHT_IMAGE:?Set to a published general-runner image}
     profiles: [ci-light]
@@ -80,14 +80,13 @@ services:
       ACTIONS_RUNNER_HOOK_JOB_STARTED: ""
       ACTIONS_RUNNER_HOOK_JOB_COMPLETED: ""
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - titan-runner-light-state:/var/lib/titan-runner/state
       - titan-runner-light-work:/var/lib/titan-runner/work
       - titan-runner-light-cache:/var/lib/titan-runner/cache
     healthcheck:
       test:
         - CMD-SHELL
-        - pgrep -u runner -f 'Runner.Listener' >/dev/null && gosu runner docker info >/dev/null 2>&1
+        - pgrep -u runner -f 'Runner.Listener' >/dev/null
       interval: 30s
       timeout: 10s
       retries: 3

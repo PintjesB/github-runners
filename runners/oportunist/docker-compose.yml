@@ -41,7 +41,7 @@ services:
       - oportunist-runner-net
 
   # Requires general-runner PR #61 merged and its image published before deployment.
-  # The Docker socket is retained for existing docker-run actionlint jobs.
+  # Requires Titan #294 and Oportunist #166 (native actionlint) merged first.
   runner-light:
     image: ${OPORTUNIST_RUNNER_LIGHT_IMAGE:?Set to a published general-runner image}
     profiles: [ci-light]
@@ -64,14 +64,13 @@ services:
       PIP_CACHE_DIR: /var/lib/oportunist-runner/cache/pip
       npm_config_cache: /var/lib/oportunist-runner/cache/npm
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - oportunist-runner-light-state:/var/lib/oportunist-runner/state
       - oportunist-runner-light-work:/var/lib/oportunist-runner/work
       - oportunist-runner-light-cache:/var/lib/oportunist-runner/cache
     healthcheck:
       test:
         - CMD-SHELL
-        - pgrep -u runner -f 'Runner.Listener' >/dev/null && gosu runner docker info >/dev/null 2>&1
+        - pgrep -u runner -f 'Runner.Listener' >/dev/null
       interval: 30s
       timeout: 10s
       retries: 3

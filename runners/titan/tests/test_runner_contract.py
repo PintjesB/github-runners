@@ -885,6 +885,9 @@ def test_compose_has_no_registration_sidecar() -> None:
     assert light["environment"]["RUNNER_LABELS"] == "titan-ci-light"
     assert "titan-runner-light-state:/var/lib/titan-runner/state" in light["volumes"]
     assert "titan-runner-light-work:/var/lib/titan-runner/work" in light["volumes"]
+    assert "/var/run/docker.sock:/var/run/docker.sock" not in light["volumes"]
+    assert all(not (isinstance(mount, dict) and mount.get("type") == "bind") for mount in light["volumes"])
+    assert "docker info" not in str(light["healthcheck"])
 
 
 def test_dockerfile_bakes_pinned_playwright_core_install() -> None:

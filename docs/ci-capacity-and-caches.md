@@ -6,9 +6,10 @@ and `oportunist-ci`; the light labels are `titan-ci-light` and
 `oportunist-ci-light`. Each light listener is limited to one CPU and 2 GiB RAM.
 After PR #61 publishes `general-runner`, light listeners use that smaller
 image and retain their independent registration, work and cache volumes.
-They intentionally keep host Docker socket access for the existing
-`docker run`-based actionlint workflow. Remove the sockets only after both
-consumer repositories migrate to native actionlint.
+Light listeners have no host Docker socket. Their workflow-lint checks use
+SHA-256-verified native actionlint from Titan Stocks PR #294 and Oportunist
+PR #166. Merge both workflow PRs before deploying the socketless service.
+Heavy listeners retain Docker socket access for image builds.
 
 ## Adoption order
 
@@ -16,8 +17,9 @@ These changes require a newly published runner image containing the updated
 `start-runner.sh`. Existing image tags in examples and deployment manifests
 are not evidence that this change has been released.
 
-1. Publish and verify each affected runner image through its existing release
-   process. Select that real release/digest in the host's deployment settings.
+1. Merge github-runners PR #61; publish and verify the general-runner image.
+   Merge Titan Stocks PR #294 and Oportunist PR #166 so linting no longer uses
+   Docker, then merge migration PR #62 and pin the verified general image digest.
 2. Apply the corresponding Compose manifest. Recreate the heavy `runner`
    outside an active job so startup creates owned pip/npm cache directories.
 3. Obtain a fresh repository registration token for the new listener and set
