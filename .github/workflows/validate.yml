@@ -40,7 +40,7 @@ jobs:
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             {
-              echo 'profiles=["titan","oportunist"]'
+              echo 'profiles=["titan","oportunist","general"]'
               echo 'has_profiles=true'
             } >> "$GITHUB_OUTPUT"
             exit 0
@@ -51,6 +51,7 @@ jobs:
 
           titan=false
           oportunist=false
+          general=false
 
           if printf '%s\n' "$files" | grep -E '^runners/titan/' >/dev/null; then
             titan=true
@@ -58,20 +59,24 @@ jobs:
           if printf '%s\n' "$files" | grep -E '^runners/oportunist/' >/dev/null; then
             oportunist=true
           fi
+          if printf '%s\n' "$files" | grep -E '^runners/general/' >/dev/null; then
+            general=true
+          fi
           # Metadata-only workflows cannot affect runner image capabilities.
           # Unexpected workflow changes still validate both profiles.
           if printf '%s\n' "$files" | grep -E '^\.github/workflows/' \
               | grep -Ev '^\.github/workflows/(renovate-config|workflow-lint|sync-renovate-labels|_sync-renovate-merge-labels)\.yml$' >/dev/null; then
             titan=true
             oportunist=true
+            general=true
           fi
 
-          if [ "$titan" = true ] && [ "$oportunist" = true ]; then
-            profiles='["titan","oportunist"]'
-          elif [ "$titan" = true ]; then
-            profiles='["titan"]'
-          elif [ "$oportunist" = true ]; then
-            profiles='["oportunist"]'
+          selected=()
+          if [ "$titan" = true ]; then selected+=('"titan"'); fi
+          if [ "$oportunist" = true ]; then selected+=('"oportunist"'); fi
+          if [ "$general" = true ]; then selected+=('"general"'); fi
+          if [ "${#selected[@]}" -gt 0 ]; then
+            profiles="[$(IFS=,; echo "${selected[*]}")]"
           else
             # Keep a syntactically valid matrix value, but skip the expensive
             # profile jobs. The final Required CI job still reports success.
@@ -160,11 +165,17 @@ jobs:
           cache-to: type=gha,mode=min,scope=runner-${{ matrix.profile }}-${{ matrix.arch }}
 
       - name: Probe native runner
+        env:
+          PROFILE: ${{ matrix.profile }}
         run: |
+          socket_args=()
+          if [ "$PROFILE" != general ]; then
+            socket_args+=(-v /var/run/docker.sock:/var/run/docker.sock)
+          fi
           docker run --rm --entrypoint /usr/local/bin/probe \
             --security-opt no-new-privileges:true \
             --add-host host.docker.internal:host-gateway --shm-size 2gb \
-            -v /var/run/docker.sock:/var/run/docker.sock \
+            "${socket_args[@]}" \
             -e HOME=/tmp -e EXPECTED_ARCH=${{ matrix.arch }} \
             runner-under-test:latest --skip-network
 

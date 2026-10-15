@@ -1,0 +1,39 @@
+services:
+  runner:
+    image: ${GENERAL_RUNNER_IMAGE:?GENERAL_RUNNER_IMAGE is required}
+    container_name: ${GENERAL_RUNNER_INSTANCE:-general-runner}
+    restart: unless-stopped
+    cpus: 1
+    mem_limit: 2g
+    security_opt:
+      - no-new-privileges:true
+    privileged: false
+    environment:
+      REPO_URL: ${GENERAL_RUNNER_REPO_URL:?GENERAL_RUNNER_REPO_URL is required}
+      RUNNER_NAME: ${GENERAL_RUNNER_NAME:-general-ci}
+      RUNNER_LABELS: ${GENERAL_RUNNER_LABELS:-general-ci}
+      RUNNER_TOKEN: ${GENERAL_RUNNER_TOKEN:-}
+      RUNNER_STATE_DIR: /var/lib/general-runner/state
+      RUNNER_RUNTIME_DIR: /var/lib/general-runner/runtime
+      RUNNER_WORK_DIR: /var/lib/general-runner/work
+      PIP_CACHE_DIR: /var/lib/general-runner/cache/pip
+      npm_config_cache: /var/lib/general-runner/cache/npm
+    volumes:
+      - general-runner-state:/var/lib/general-runner/state
+      - general-runner-work:/var/lib/general-runner/work
+      - general-runner-cache:/var/lib/general-runner/cache
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -u runner -f 'Runner.Listener' >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+    stop_grace_period: 2m
+
+volumes:
+  general-runner-state:
+    name: ${GENERAL_RUNNER_INSTANCE:-general-runner}-state
+  general-runner-work:
+    name: ${GENERAL_RUNNER_INSTANCE:-general-runner}-work
+  general-runner-cache:
+    name: ${GENERAL_RUNNER_INSTANCE:-general-runner}-cache
