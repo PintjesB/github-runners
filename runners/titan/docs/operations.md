@@ -227,19 +227,18 @@ before the rest of the contract runs. A failure exits non-zero
 so the runner reports the job as failed rather than letting it
 run on a degraded VM.
 
-`PostJob.sh` tears down only Compose projects whose name matches
-the documented Titan CI prefix `titan-stocks-playwright-`
-(matched through the `com.docker.compose.project` label). For
-each matching project, `docker compose down -v` removes the
-project's containers, its bridge network, and its project-owned
-volumes. The external runner volumes (`titan-runner-state`,
-`titan-runner-work`, and `titan-runner-browser`) and any application
-development volumes are excluded by construction. The hook never
-recurses the runner's
-`_work` directory, never invokes `docker system prune`,
-`docker volume prune`, `docker image prune`, `docker builder
-prune`, or `docker network prune`, and never touches the runner
-container (`titan-runner`) or any non-CI Titan workload.
+`PostJob.sh` is a label-scoped recovery fallback for interrupted
+Playwright jobs. The Playwright script normally runs its own
+`docker compose -f docker-compose.yml -f docker-compose.e2e.yml
+--env-file <temporary-file> down -v` trap. The post-job hook cannot
+assume that Compose overlay, temporary env file, or checkout exists.
+Instead it discovers `titan-stocks-playwright-` projects from Docker
+container, volume, and network project labels; removes containers with
+exact matching labels (including their anonymous volumes), and
+removes only project-prefixed named volumes and networks with matching
+Compose resource labels. It never recurses into the runner's `_work`
+directory, invokes global Docker prune, or targets persistent
+`titan-runner-*` volumes or non-CI Titan workloads.
 
 ## Image digest resolution
 
