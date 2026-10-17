@@ -2809,7 +2809,9 @@ case "$1 $2" in
         fi
         ;;
     "ps -aq")
-        printf 'playwright-container-id\\n'
+        if [ -z "${TITAN_STUB_CONTAINERLESS:-}" ]; then
+            printf 'playwright-container-id\\n'
+        fi
         ;;
     "volume ls")
         if [[ "$*" == *"--format"* ]]; then
@@ -2856,7 +2858,9 @@ esac
             assert f"network ls --filter label=com.docker.compose.project={project}" in calls
             assert "volume rm titan-stocks-playwright-smoke-42_titan_postgres" in calls
             assert "network rm titan-stocks-playwright-smoke-42_db-net" in calls
-            if not containerless:
+            if containerless:
+                assert "rm -fv" not in calls
+            else:
                 assert "rm -fv playwright-container-id" in calls
             assert "rm -fv titan-runner" not in calls
             assert "volume rm titan-runner-state" not in calls
