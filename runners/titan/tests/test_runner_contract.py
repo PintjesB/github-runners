@@ -2785,8 +2785,8 @@ def test_post_job_hook_does_not_target_runner_or_app_resources() -> None:
     matching and non-matching project labels, plus a runner
     container. The hook MUST filter the output to only the
     ``titan-stocks-playwright-`` prefix and MUST NOT issue a
-    ``docker rm`` for the runner container or a
-    ``docker volume rm`` for a named runner volume.
+    ``docker rm`` for the runner container or any direct
+    ``docker volume rm`` commands.
     """
     import os
     import stat
@@ -2809,11 +2809,11 @@ def test_post_job_hook_does_not_target_runner_or_app_resources() -> None:
 echo "$@" >> "${TITAN_STUB_CALLS:?}"
 case "$1" in
     ps)
-        # Mimic ``docker ps -a --filter label=... --format '<project>|<volume>'``.
-        printf 'titan-stocks-playwright-smoke-42|titan-stocks-playwright-smoke-42_pg\\n'
-        printf 'titan-stocks-playwright-smoke-42|titan-stocks-playwright-smoke-42_app\\n'
-        printf 'titan-runner|\\n'
-        printf 'titan-app-dev|titan_postgres\\n'
+        # Mimic Docker's actual Compose project label on containers.
+        printf 'titan-stocks-playwright-smoke-42\\n'
+        printf 'titan-stocks-playwright-smoke-42\\n'
+        printf 'titan-runner\\n'
+        printf 'titan-app-dev\\n'
         ;;
     compose)
         # Mimic ``docker compose --project-name <name> down -v``.
@@ -2869,17 +2869,14 @@ esac
             "post-job.sh must NEVER target non-CI Titan workloads; "
             f"compose calls: {compose_calls!r}"
         )
-        # The volume removal must be limited to the
-        # ``titan-stocks-playwright-`` prefix.
+        # Post-job cleanup is deliberately Compose-scoped; no direct
+        # volume removal can target unrelated resources.
         volume_calls = [
             line for line in calls.splitlines() if "volume rm" in line
         ]
-        for line in volume_calls:
-            assert "titan-stocks-playwright-" in line, (
-                "post-job.sh must only remove volumes belonging to "
-                "titan-stocks-playwright- projects; "
-                f"volume calls: {volume_calls!r}"
-            )
+        assert not volume_calls, (
+            f"post-job.sh must not directly delete volumes: {volume_calls!r}"
+        )
         # No docker system prune is allowed.
         assert "docker system prune" not in calls, (
             "post-job.sh must NEVER invoke `docker system prune`"
