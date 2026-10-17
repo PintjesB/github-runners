@@ -1065,7 +1065,15 @@ def test_post_job_hook_only_removes_titan_prefixed_resources() -> None:
     assert "titan-runner-state" in text
     assert "titan-runner-work" in text
     assert "titan-runner-browser" in text
-    assert "titan-runner-state|titan-runner-work|titan-runner-browser" in code_only
+    # Cleanup must operate on Docker resources, not a default Compose file.
+    assert "docker ps -aq" in code_only
+    assert "docker volume ls -q" in code_only
+    assert "docker network ls" in code_only
+    assert 'label=$compose_project_label=$project' in code_only
+    assert 'label=com.docker.compose.volume' in code_only
+    assert 'label=com.docker.compose.network' in code_only
+    assert '"$project"_*' in code_only
+    assert "docker compose --project-name" not in code_only
 
 
 def test_child_job_external_workspace_contract_is_documented() -> None:
@@ -2774,117 +2782,88 @@ def test_post_job_hook_does_not_recurse_work_directory() -> None:
 
 
 def test_post_job_hook_does_not_target_runner_or_app_resources() -> None:
-    """The post-job hook MUST scope its cleanup to the documented
-    ``titan-stocks-playwright-`` Compose project label so the
-    runner container, the runner volumes, the application
-    development volumes, and any unrelated Titan-prefixed
-    workload are never targeted.
+    """Recovery cleanup uses exact Docker project labels and resource prefixes.
 
-    The test stubs ``docker`` in PATH to print a fake
-    ``docker ps -a --filter label=…`` output that contains both
-    matching and non-matching project labels, plus a runner
-    container. The hook MUST filter the output to only the
-    ``titan-stocks-playwright-`` prefix and MUST NOT issue a
-    ``docker rm`` for the runner container or any direct
-    ``docker volume rm`` commands.
+    Fake Docker responses include unrelated resources even where real Docker
+    would filter them, to catch accidental unscoped removal.
     """
     import os
-    import stat
     import subprocess
     import tempfile
+    from pathlib import Path
 
-    repo_root = ROOT
-
-    stub_dir = tempfile.mkdtemp()
-    try:
-        # Stub ``docker`` that records every invocation and
-        # returns a deterministic response to the documented
-        # commands.
-        calls_log = os.path.join(stub_dir, "calls.log")
-        with open(calls_log, "w", encoding="utf-8") as log_fh:
-            log_fh.write("")
-
-        docker_stub = os.path.join(stub_dir, "docker")
-        docker_stub_contents = """#!/usr/bin/env bash
-echo "$@" >> "${TITAN_STUB_CALLS:?}"
-case "$1" in
-    ps)
-        # Mimic Docker's actual Compose project label on containers.
-        printf 'titan-stocks-playwright-smoke-42\\n'
-        printf 'titan-stocks-playwright-smoke-42\\n'
-        printf 'titan-runner\\n'
-        printf 'titan-app-dev\\n'
+    with tempfile.TemporaryDirectory() as stub_dir:
+        stub = Path(stub_dir)
+        calls_log = stub / "calls.log"
+        calls_log.write_text("", encoding="utf-8")
+        docker_stub = stub / "docker"
+        docker_stub.write_text(
+            """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "${TITAN_STUB_CALLS:?}"
+case "$1 $2" in
+    "ps -a")
+        if [ -z "${TITAN_STUB_CONTAINERLESS:-}" ]; then
+            printf 'titan-stocks-playwright-smoke-42\\n'
+            printf 'titan-runner\\n'
+            printf 'unrelated-stack\\n'
+        fi
         ;;
-    compose)
-        # Mimic ``docker compose --project-name <name> down -v``.
-        exit 0
+    "ps -aq")
+        printf 'playwright-container-id\\n'
         ;;
-    volume)
-        exit 0
+    "volume ls")
+        if [[ "$*" == *"--format"* ]]; then
+            printf 'titan-stocks-playwright-smoke-42\\n'
+        else
+            printf 'titan-stocks-playwright-smoke-42_titan_postgres\\n'
+            printf 'titan-runner-state\\n'
+            printf 'unrelated_database\\n'
+        fi
+        ;;
+    "network ls")
+        if [[ "$*" == *'com.docker.compose.project"}}'* ]]; then
+            printf 'titan-stocks-playwright-smoke-42\\n'
+        else
+            printf 'titan-stocks-playwright-smoke-42_db-net\\n'
+            printf 'unrelated-network\\n'
+        fi
         ;;
     *) exit 0 ;;
 esac
-"""
-        with open(docker_stub, "w", encoding="utf-8") as fh:
-            fh.write(docker_stub_contents)
-        os.chmod(docker_stub, 0o755)
+""",
+            encoding="utf-8",
+        )
+        docker_stub.chmod(0o755)
 
-        env = os.environ.copy()
-        env["PATH"] = stub_dir + os.pathsep + env.get("PATH", "/usr/bin:/bin")
-        env["TITAN_STUB_CALLS"] = calls_log
-
-        result = subprocess.run(
-            ["bash", str(repo_root / "scripts" / "post-job.sh")],
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, (
-            f"post-job.sh must exit 0; got {result.returncode} "
-            f"stderr={result.stderr!r}"
-        )
-        with open(calls_log, encoding="utf-8") as fh:
-            calls = fh.read()
-        # The hook must invoke ``docker compose --project-name`` for
-        # the ``titan-stocks-playwright-`` projects only.
-        compose_calls = [
-            line
-            for line in calls.splitlines()
-            if "compose" in line and "down" in line
-        ]
-        assert any(
-            "titan-stocks-playwright-smoke-42" in line for line in compose_calls
-        ), (
-            "post-job.sh must tear down titan-stocks-playwright- projects; "
-            f"compose calls: {compose_calls!r}"
-        )
-        # The runner container and the application development
-        # projects must never be targeted.
-        assert not any("titan-runner" in line for line in compose_calls), (
-            "post-job.sh must NEVER target the runner container; "
-            f"compose calls: {compose_calls!r}"
-        )
-        assert not any("titan-app-dev" in line for line in compose_calls), (
-            "post-job.sh must NEVER target non-CI Titan workloads; "
-            f"compose calls: {compose_calls!r}"
-        )
-        # Post-job cleanup is deliberately Compose-scoped; no direct
-        # volume removal can target unrelated resources.
-        volume_calls = [
-            line for line in calls.splitlines() if "volume rm" in line
-        ]
-        assert not volume_calls, (
-            f"post-job.sh must not directly delete volumes: {volume_calls!r}"
-        )
-        # No docker system prune is allowed.
-        assert "docker system prune" not in calls, (
-            "post-job.sh must NEVER invoke `docker system prune`"
-        )
-    finally:
-        import shutil
-
-        shutil.rmtree(stub_dir, ignore_errors=True)
+        for containerless in (False, True):
+            calls_log.write_text("", encoding="utf-8")
+            env = os.environ.copy()
+            env["PATH"] = f"{stub_dir}:{env.get('PATH', '/usr/bin:/bin')}"
+            env["TITAN_STUB_CALLS"] = str(calls_log)
+            if containerless:
+                env["TITAN_STUB_CONTAINERLESS"] = "1"
+            else:
+                env.pop("TITAN_STUB_CONTAINERLESS", None)
+            result = subprocess.run(
+                ["bash", str(ROOT / "scripts" / "post-job.sh")],
+                env=env, check=False, capture_output=True, text=True,
+            )
+            assert result.returncode == 0, result.stderr
+            calls = calls_log.read_text(encoding="utf-8")
+            project = "titan-stocks-playwright-smoke-42"
+            assert f"ps -aq --filter label=com.docker.compose.project={project}" in calls
+            assert f"volume ls -q --filter label=com.docker.compose.project={project}" in calls
+            assert f"network ls --filter label=com.docker.compose.project={project}" in calls
+            assert "volume rm titan-stocks-playwright-smoke-42_titan_postgres" in calls
+            assert "network rm titan-stocks-playwright-smoke-42_db-net" in calls
+            if not containerless:
+                assert "rm -fv playwright-container-id" in calls
+            assert "rm -fv titan-runner" not in calls
+            assert "volume rm titan-runner-state" not in calls
+            assert "volume rm unrelated_database" not in calls
+            assert "network rm unrelated-network" not in calls
+            assert "compose " not in calls
+            assert "prune" not in calls
 
 
 def test_publish_workflow_validates_compose_contract() -> None:
