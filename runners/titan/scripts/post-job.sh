@@ -1,74 +1,85 @@
 #!/usr/bin/env bash
-# GitHub Actions runner post-job hook for Titan Stocks.
+# Bounded GitHub Actions post-job cleanup for disposable Titan Playwright projects.
 #
-# The hook runs in the runner user's context immediately after a
-# workflow job finishes. It enforces a bounded hygiene contract
-# anchored on the documented ``titan-stocks-playwright-`` project
-# label:
+# The Playwright invocation normally performs docker compose down -v with its
+# own Compose overlays and temporary env file. On a cancelled/killed job, this
+# hook must recover without that env file, working directory, or checkout.
 #
-#   * Only Compose projects whose name matches the documented
-#     Titan CI prefix ``titan-stocks-playwright-`` are torn down.
-#     The runner's own ``titan-runner`` container is left alone.
-#   * The shared Playwright browser volume and the persistent
-#     ``titan-runner-state``, ``titan-runner-work``,
-#     ``titan-runner-browser`` volumes
-#     are NEVER touched. ``docker compose down -v`` removes only
-#     volumes owned by the matching child project; the external
-#     runner volumes are excluded by construction.
-#   * The shared Playwright ``.cache/ms-playwright`` and any
-#     Docker build cache are NEVER pruned.
-#   * No ``docker system prune``, ``docker volume prune``, ``docker
-#     image prune``, ``docker builder prune``, or ``docker network
-#     prune`` is invoked.
-#   * The runner ``_work`` directory is NEVER recursed into. The
-#     bounded cleanup only targets the matching Compose projects;
-#     any non-Titan checkout, any application development volume,
-#     and any unrelated workspace is left alone. The runner-owned
-#     named volumes titan-runner-state, titan-runner-work,
-#     titan-runner-browser are protected
-#     storage and are never removed by this hook.
-#
-# The hook is intentionally permissive on failure: a cleanup error
-# must not fail the workflow job that just succeeded. Errors are
-# logged so operators can investigate, but the exit code is always
-# zero unless something fundamentally unsafe happens.
+# Find containers, named volumes, and networks by Docker's *resource labels*.
+# Never discover volume labels from containers and never issue a global prune.
+# External runner-state/work/cache/browser volumes have unrelated project
+# labels and are not eligible for deletion.
 set -uo pipefail
 
 log() { printf '[post-job] %s\n' "$*"; }
 
-# The CI prefix matches the project name the Playwright stack
-# uses (``titan-stocks-playwright-<profile>-<pid>``). Any other
-# ``titan-*`` resource on the runner host belongs to a different
-# workload and must not be touched here. The prefix is anchored on
-# the documented ``titan-stocks-playwright-`` literal so the runner
-# container (``titan-runner``) and any future ``titan-`` workload
-# cannot be torn down by mistake.
 titan_project_re='^titan-stocks-playwright-'
 compose_project_label='com.docker.compose.project'
 
 remove_titan_compose_projects() {
-    # ``docker compose ls`` is not available in every docker CLI
-    # version, so we list the containers directly and recover the
-    # Compose project label. ``docker compose --project-name <name>
-    # down -v`` removes the project's containers, its bridge
-    # network, and its project-owned volumes; external volumes are
-    # left alone, so titan-runner-state, titan-runner-work,
-    # titan-runner-browser, and application
-    # development volumes are never affected.
-    local projects
-    projects="$(docker ps -a --filter label="$compose_project_label" \
-        --format '{{.Label "com.docker.compose.project"}}' 2>/dev/null \
-        | grep -E "$titan_project_re" | sort -u || true)"
+    local projects project container volume network containers volumes networks
+    # Query all three kinds of resources. A killed process may already have
+    # removed its containers, leaving only project volumes or networks.
+    projects="$(
+        {
+            docker ps -a --filter "label=$compose_project_label" \
+                --format '{{.Label "com.docker.compose.project"}}' || true
+            docker volume ls --filter "label=$compose_project_label" \
+                --format '{{.Label "com.docker.compose.project"}}' || true
+            docker network ls --filter "label=$compose_project_label" \
+                --format '{{.Label "com.docker.compose.project"}}' || true
+        } 2>/dev/null | grep -E "$titan_project_re" | sort -u || true
+    )"
     if [ -z "$projects" ]; then
-        log "no Titan CI Compose projects to tear down"
+        log "no Titan Playwright resources to clean"
         return 0
     fi
-    local project
-    for project in $projects; do
-        log "tearing down Titan CI Compose project: $project"
-        docker compose --project-name "$project" down -v \
-            >/dev/null 2>&1 || log "compose down failed for $project (ignored)"
-    done
+
+    while IFS= read -r project; do
+        [ -n "$project" ] || continue
+        log "cleaning disposable Titan Playwright project: $project"
+
+        # Exact project-label filtering prevents touching titan-runner,
+        # non-CI Titan resources, or unrelated Docker workloads.
+        containers="$(docker ps -aq \
+            --filter "label=$compose_project_label=$project" 2>/dev/null || true)"
+        while IFS= read -r container; do
+            [ -n "$container" ] || continue
+            # -v removes only anonymous volumes attached to this container.
+            docker rm -fv "$container" >/dev/null 2>&1 \
+                || log "could not remove project container $container (ignored)"
+        done <<< "$containers"
+
+        # Compose sets project and compose.volume labels on *volume resources*,
+        # not containers. Limit removal to project-prefixed, Compose-owned
+        # named volumes. Docker refuses removal of an in-use volume.
+        volumes="$(docker volume ls -q \
+            --filter "label=$compose_project_label=$project" \
+            --filter "label=com.docker.compose.volume" 2>/dev/null || true)"
+        while IFS= read -r volume; do
+            [ -n "$volume" ] || continue
+            case "$volume" in
+                "$project"_*) ;;
+                *) log "refusing non-project volume $volume"; continue ;;
+            esac
+            docker volume rm "$volume" >/dev/null 2>&1 \
+                || log "could not remove project volume $volume (ignored)"
+        done <<< "$volumes"
+
+        networks="$(docker network ls \
+            --filter "label=$compose_project_label=$project" \
+            --filter "label=com.docker.compose.network" \
+            --format '{{.Name}}' 2>/dev/null || true)"
+        while IFS= read -r network; do
+            [ -n "$network" ] || continue
+            case "$network" in
+                "$project"_*) ;;
+                *) log "refusing non-project network $network"; continue ;;
+            esac
+            docker network rm "$network" >/dev/null 2>&1 \
+                || log "could not remove project network $network (ignored)"
+        done <<< "$networks"
+    done <<< "$projects"
 }
 
 log "running Titan runner post-job cleanup"
