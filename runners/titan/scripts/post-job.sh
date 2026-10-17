@@ -71,42 +71,7 @@ remove_titan_compose_projects() {
     done
 }
 
-remove_titan_volumes() {
-    # ``docker volume ls --filter label=...`` is not portable
-    # across every docker CLI version, so we read the
-    # ``com.docker.compose.project`` label off the container that
-    # owns each anonymous volume, then match it against the CI
-    # prefix. Only anonymous volumes whose owning container
-    # carries the documented label are removed. Named volumes
-    # (such as ``titan-runner-state``, ``titan-runner-work``,
-    # ``titan-runner-browser``, and any
-    # application development volume) are excluded by construction.
-    local volumes
-    volumes="$(docker ps -a --filter label="$compose_project_label" \
-        --format '{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.volume"}}' \
-        2>/dev/null \
-        | awk -F'|' '$1 ~ /'"$titan_project_re"'/ && $2 != "" {print $2}' \
-        | sort -u || true)"
-    if [ -z "$volumes" ]; then
-        log "no Titan CI anonymous volumes to remove"
-        return 0
-    fi
-    local volume
-    for volume in $volumes; do
-        case "$volume" in
-            titan-runner-state|titan-runner-work|titan-runner-browser)
-                log "leaving protected runner volume untouched: $volume"
-                continue
-                ;;
-        esac
-        log "removing Titan CI volume: $volume"
-        docker volume rm "$volume" >/dev/null 2>&1 \
-            || log "volume rm failed for $volume (ignored)"
-    done
-}
-
 log "running Titan runner post-job cleanup"
 remove_titan_compose_projects
-remove_titan_volumes
 log "post-job cleanup complete"
 exit 0
