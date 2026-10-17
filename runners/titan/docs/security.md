@@ -249,10 +249,6 @@ performs a bounded cleanup after every workflow job:
   `docker compose down -v` removes each project's containers,
   its bridge network, and its project-owned volumes; external
   runner volumes are never removed.
-* It removes anonymous Docker volumes whose
-  `com.docker.compose.project` label matches the same prefix
-  (defensive catch-all for volumes whose owning container was
-  force-removed without a matching `docker compose down`).
 * It does NOT recurse into the runner's `_work` directory.
   The bounded cleanup only targets the matching Compose
   projects (anchored on the documented
