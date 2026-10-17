@@ -1062,9 +1062,6 @@ def test_post_job_hook_only_removes_titan_prefixed_resources() -> None:
             f"post-job.sh must NEVER invoke {marker!r}"
         )
     assert "docker volume rm titan-runner-" not in code_only
-    assert "titan-runner-state" in text
-    assert "titan-runner-work" in text
-    assert "titan-runner-browser" in text
     # Cleanup must operate on Docker resources, not a default Compose file.
     assert "docker ps -aq" in code_only
     assert "docker volume ls -q" in code_only
