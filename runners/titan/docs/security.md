@@ -243,12 +243,16 @@ network.
 `ACTIONS_RUNNER_HOOK_JOB_COMPLETED` environment variable. It
 performs a bounded cleanup after every workflow job:
 
-* It tears down Compose projects whose name matches the
-  documented Titan CI prefix `titan-stocks-playwright-` only,
-  identified through the `com.docker.compose.project` label.
-  `docker compose down -v` removes each project's containers,
-  its bridge network, and its project-owned volumes; external
-  runner volumes are never removed.
+* It discovers disposable Compose resources by their Docker
+  `com.docker.compose.project` labels, with an anchored
+  `titan-stocks-playwright-` project prefix. It removes only
+  containers with an exact project-label match, their anonymous
+  volumes, matching project-owned named volumes, and matching
+  project-owned networks. External runner volumes remain untouched.
+* The fallback is independent of the temporary Playwright Compose
+  overlay and env file, which might be unavailable after an
+  interrupted job. The Playwright script's normal `down -v` trap
+  remains the primary cleanup.
 * It does NOT recurse into the runner's `_work` directory.
   The bounded cleanup only targets the matching Compose
   projects (anchored on the documented
