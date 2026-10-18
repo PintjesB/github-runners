@@ -269,20 +269,14 @@ RUN chmod 0755 /usr/local/bin/register \
                 /usr/local/bin/probe \
                 /usr/local/bin/upstream-version
 
-# Stage the bounded GitHub Actions pre/post-job hooks.
-# ``pre-job.sh`` validates that required host capabilities and the
-# ``host.docker.internal`` alias are available before the job
-# starts. ``post-job.sh`` removes only Titan-prefixed temporary
-# Compose projects and their project-owned volumes; it never
-# touches the external runner volumes, invokes ``docker system prune``,
-# or recurses the persistent ``_work`` directory. The hooks live inside
-# the image-owned runner tree so
-# every materialised runtime tree carries them.
+# Install only the fail-fast pre-job capability hook.
+# Playwright owns its disposable Compose project's cleanup via its
+# own EXIT trap (docker compose down -v). A generic runner post-job
+# hook cannot safely infer job ownership from a shared Docker daemon
+# and must not delete another workflow's still-running resources.
 RUN install -d -m 0755 /opt/actions-runner/.hooks
 COPY scripts/pre-job.sh /opt/actions-runner/.hooks/PreJob.sh
-COPY scripts/post-job.sh /opt/actions-runner/.hooks/PostJob.sh
-RUN chmod 0755 /opt/actions-runner/.hooks/PreJob.sh \
-                /opt/actions-runner/.hooks/PostJob.sh
+RUN chmod 0755 /opt/actions-runner/.hooks/PreJob.sh
 
 # Document the expected labels so operators can spot misconfigured
 # deployments at a glance. The labels are passed at registration
