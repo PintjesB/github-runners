@@ -27,8 +27,8 @@
 #     native runner architecture.
 #   * ``deploy.sh`` rejects unknown subcommands and exposes only the
 #     single-container lifecycle commands.
-#   * ``pre-job.sh`` and ``post-job.sh`` exist, are executable,
-#     and contain the documented contract.
+#   * ``pre-job.sh`` exists and validates host capabilities;
+#     no shared-daemon post-job cleanup hook is installed.
 
 set -uo pipefail
 
