@@ -51,7 +51,7 @@ has to fetch a new registration token.
 | `/var/lib/titan-runner/work` | named volume `titan-runner-work` | `runner:runner` | `0750` | **yes** |
 | `/var/lib/titan-runner/browser` | named volume `titan-runner-browser` | `runner:runner` | `0750` | **yes** |
 | `/opt/titan-probe/node_modules` | Image-owned `playwright-core` install | `root` | image default | image layer |
-| `/opt/actions-runner/.hooks` | Image-owned pre/post-job hooks | `root` | `0755` | image layer |
+| `/opt/actions-runner/.hooks` | Image-owned pre-job capability hook only | `root` | `0755` | image layer |
 
 The state directory holds `.runner`, `.credentials`,
 `.credentials_rsaparams`, `.lock/register.lock` (an internal
@@ -204,42 +204,28 @@ Transient dependency drift must not trigger a restart loop on a
 long-lived listener; release validation is the right place for
 the full probe.
 
-## Pre-job and post-job hooks
+## Pre-job validation and job-owned cleanup
 
-GitHub Actions invokes `$RUNNER_ROOT/.hooks/PreJob.sh` and
-`$RUNNER_ROOT/.hooks/PostJob.sh` around every job. The image
-bundles these hooks in `/opt/actions-runner/.hooks/` so they
-materialise into every runtime tree. The Compose contract wires
-the activation mechanism &mdash; the documented
-`ACTIONS_RUNNER_HOOK_JOB_STARTED` and
-`ACTIONS_RUNNER_HOOK_JOB_COMPLETED` environment variables
-pointing at absolute runtime paths &mdash; so the hooks actually
-fire.
+The heavy runner installs only `PreJob.sh` in
+`/opt/actions-runner/.hooks/`. Compose activates it through
+`ACTIONS_RUNNER_HOOK_JOB_STARTED`, pointing at the materialised
+runtime-tree path. It checks the native `RUNNER_ARCH`, Docker daemon
+architecture, Docker/Compose/Buildx availability, Playwright
+Chromium and `host.docker.internal`; incompatible jobs fail early.
 
-`PreJob.sh` resolves the native runner architecture from the
-`RUNNER_ARCH` env var that GitHub supplies on every job (`X64`
-on x86_64 runners, `ARM64` on aarch64 runners) and validates
-that required host capabilities and the `host.docker.internal`
-alias are available before the job starts. The Docker daemon's
-reported architecture MUST match the native runner
-architecture; an emulated or mismatched daemon aborts the hook
-before the rest of the contract runs. A failure exits non-zero
-so the runner reports the job as failed rather than letting it
-run on a degraded VM.
+**No `ACTIONS_RUNNER_HOOK_JOB_COMPLETED` hook is configured or
+installed for the heavy runner.** A per-runner job completion
+callback cannot safely distinguish resources belonging to its job
+from another live Playwright project on the same Docker daemon.
 
-`PostJob.sh` tears down only Compose projects whose name matches
-the documented Titan CI prefix `titan-stocks-playwright-`
-(matched through the `com.docker.compose.project` label). For
-each matching project, `docker compose down -v` removes the
-project's containers, its bridge network, and its project-owned
-volumes. The external runner volumes (`titan-runner-state`,
-`titan-runner-work`, and `titan-runner-browser`) and any application
-development volumes are excluded by construction. The hook never
-recurses the runner's
-`_work` directory, never invokes `docker system prune`,
-`docker volume prune`, `docker image prune`, `docker builder
-prune`, or `docker network prune`, and never touches the runner
-container (`titan-runner`) or any non-CI Titan workload.
+Playwright's own `scripts/run_playwright_stack.sh` creates a unique
+`COMPOSE_PROJECT_NAME` and normally tears it down through its
+`EXIT` trap, passing both Compose overlays and its temporary env
+file to `docker compose down -v`. The fast browser-only suite
+creates no Compose project. No automated broad sweep is performed
+for unexpectedly orphaned projects after a crash, SIGKILL, or power
+failure. An operator must confirm the resources are abandoned before
+manually removing them; never prune runner-owned volumes or active jobs.
 
 ## Image digest resolution
 

@@ -65,7 +65,6 @@ REGISTER_SCRIPT = SCRIPTS_DIR / "register.sh"
 START_RUNNER_SCRIPT = SCRIPTS_DIR / "start-runner.sh"
 PROBE_SCRIPT = SCRIPTS_DIR / "probe.sh"
 PRE_JOB_SCRIPT = SCRIPTS_DIR / "pre-job.sh"
-POST_JOB_SCRIPT = SCRIPTS_DIR / "post-job.sh"
 PROBE_DIR = ROOT / "probe"
 PROBE_PACKAGE_JSON = PROBE_DIR / "package.json"
 PROBE_PACKAGE_LOCK = PROBE_DIR / "package-lock.json"
@@ -204,30 +203,14 @@ def test_dockerfile_omits_oci_license_label() -> None:
     )
 
 
-def test_dockerfile_bundles_runner_hooks() -> None:
-    """The image MUST bundle the pre/post-job hooks in the runner tree.
-
-    GitHub Actions invokes ``$RUNNER_ROOT/.hooks/PreJob.sh`` and
-    ``$RUNNER_ROOT/.hooks/PostJob.sh`` around every job. The image
-    carries these so the materialised runtime tree picks them up
-    on every container start.
-    """
+def test_dockerfile_bundles_only_pre_job_hook() -> None:
+    """The runner image must never install a daemon-wide cleanup hook."""
     text = _read(DOCKERFILE)
-    assert "/opt/actions-runner/.hooks" in text, (
-        "Dockerfile must install the .hooks directory under the runner tree"
-    )
-    assert "scripts/pre-job.sh" in text, (
-        "Dockerfile must COPY scripts/pre-job.sh"
-    )
-    assert "scripts/post-job.sh" in text, (
-        "Dockerfile must COPY scripts/post-job.sh"
-    )
-    assert ".hooks/PreJob.sh" in text, (
-        "Dockerfile must install the pre-job hook as .hooks/PreJob.sh"
-    )
-    assert ".hooks/PostJob.sh" in text, (
-        "Dockerfile must install the post-job hook as .hooks/PostJob.sh"
-    )
+    assert "/opt/actions-runner/.hooks" in text
+    assert "scripts/pre-job.sh" in text
+    assert ".hooks/PreJob.sh" in text
+    assert "scripts/post-job.sh" not in text
+    assert ".hooks/PostJob.sh" not in text
 
 
 def test_register_reads_runner_token_from_env_var() -> None:
@@ -1019,53 +1002,20 @@ def test_pre_job_hook_validates_host_capabilities() -> None:
         assert marker in code_only, f"pre-job.sh must include {marker!r}"
 
 
-def test_post_job_hook_only_removes_titan_prefixed_resources() -> None:
-    """The post-job hook MUST remove only Titan CI Compose
-    projects (matched by the documented ``titan-stocks-playwright-``
-    prefix and the ``com.docker.compose.project`` label) and the
-    project-owned volumes that belong to those projects. It must NEVER
-    run a global prune and must NEVER touch the persistent named
-    volumes or the Playwright browser cache.
+def test_no_runner_post_job_cleanup_is_installed_or_activated() -> None:
+    """The global post-job hook must not stop another active Playwright job.
 
-    The bounded cleanup is anchored on the documented project
-    prefix so a future Titan workload that adopts a different
-    project name cannot be torn down by mistake.
+    The application script's own Compose EXIT trap is responsible for
+    teardown. The shared Docker daemon must never be swept per runner job.
     """
-    text = _read(POST_JOB_SCRIPT)
-    code_only = "\n".join(
-        line for line in text.splitlines() if not line.lstrip().startswith("#")
-    )
-    # Required bounded-cleanup markers.
-    assert "titan-stocks-playwright-" in code_only, (
-        "post-job.sh must scope cleanup to the documented Titan CI project prefix"
-    )
-    assert "com.docker.compose.project" in code_only, (
-        "post-job.sh must identify Compose projects by their documented label"
-    )
-    # The hook must NOT match against the bare ``titan-`` prefix
-    # because that would also catch the runner's own
-    # ``titan-runner`` container.
-    assert "titan_project_re='^titan-'" not in code_only, (
-        "post-job.sh must NOT match the bare `titan-` prefix; the "
-        "titan-runner container would otherwise be a target."
-    )
-    # Forbidden operations.
-    forbidden = (
-        "docker system prune",
-        "docker volume prune",
-        "docker image prune",
-        "docker builder prune",
-        "docker network prune",
-    )
-    for marker in forbidden:
-        assert marker not in code_only, (
-            f"post-job.sh must NEVER invoke {marker!r}"
-        )
-    assert "docker volume rm titan-runner-" not in code_only
-    assert "titan-runner-state" in text
-    assert "titan-runner-work" in text
-    assert "titan-runner-browser" in text
-    assert "titan-runner-state|titan-runner-work|titan-runner-browser" in code_only
+    assert not (SCRIPTS_DIR / "post-job.sh").exists()
+    dockerfile = _read(DOCKERFILE)
+    assert "PostJob.sh" not in dockerfile
+    # The optional light runner explicitly sets completed hook to an
+    # empty string. Assert only the heavy listener's configuration.
+    heavy = _read(COMPOSE_FILE).split("  runner:", 1)[1].split("  runner-light:", 1)[0]
+    assert "ACTIONS_RUNNER_HOOK_JOB_STARTED" in heavy
+    assert "ACTIONS_RUNNER_HOOK_JOB_COMPLETED" not in heavy
 
 
 def test_child_job_external_workspace_contract_is_documented() -> None:
@@ -1192,44 +1142,12 @@ def test_deploy_status_uses_listener_username() -> None:
     )
 
 
-def test_compose_enables_actions_runner_hooks() -> None:
-    """The listener MUST enable the GitHub Actions pre/post-job hooks
-    through ``ACTIONS_RUNNER_HOOK_JOB_STARTED`` and
-    ``ACTIONS_RUNNER_HOOK_JOB_COMPLETED`` pointing at absolute
-    runtime paths.
-
-    GitHub documents these variables as the activation mechanism;
-    copying hooks into ``.hooks/`` is necessary but not
-    sufficient.
-    """
-    text = _read(COMPOSE_FILE)
-    # Locate the runner service's environment block. The runner
-    # body runs until the top-level ``networks:`` block.
-    services_block = text.split("services:", 1)[1]
-    runner_section = services_block.split("runner:", 1)[1]
-    runner_section = runner_section.split("\nnetworks:", 1)[0]
-    assert "ACTIONS_RUNNER_HOOK_JOB_STARTED:" in runner_section, (
-        "docker-compose.yml listener must declare ACTIONS_RUNNER_HOOK_JOB_STARTED"
-    )
-    assert "ACTIONS_RUNNER_HOOK_JOB_COMPLETED:" in runner_section, (
-        "docker-compose.yml listener must declare ACTIONS_RUNNER_HOOK_JOB_COMPLETED"
-    )
-    # The values must point at absolute paths inside the runtime
-    # tree so the listener can resolve them on every start.
-    started = re.search(
-        r"ACTIONS_RUNNER_HOOK_JOB_STARTED:[^\n]*", runner_section
-    )
-    assert started, "ACTIONS_RUNNER_HOOK_JOB_STARTED declaration missing"
-    assert "/var/lib/titan-runner/runtime/.hooks/PreJob.sh" in started.group(0), (
-        "ACTIONS_RUNNER_HOOK_JOB_STARTED must point at the runtime-tree hook path"
-    )
-    completed = re.search(
-        r"ACTIONS_RUNNER_HOOK_JOB_COMPLETED:[^\n]*", runner_section
-    )
-    assert completed, "ACTIONS_RUNNER_HOOK_JOB_COMPLETED declaration missing"
-    assert "/var/lib/titan-runner/runtime/.hooks/PostJob.sh" in completed.group(0), (
-        "ACTIONS_RUNNER_HOOK_JOB_COMPLETED must point at the runtime-tree hook path"
-    )
+def test_compose_enables_only_pre_job_hook() -> None:
+    """Host capability checks run before jobs; post-job cleanup is disabled."""
+    heavy = _read(COMPOSE_FILE).split("  runner:", 1)[1].split("  runner-light:", 1)[0]
+    assert "ACTIONS_RUNNER_HOOK_JOB_STARTED:" in heavy
+    assert "/var/lib/titan-runner/runtime/.hooks/PreJob.sh" in heavy
+    assert "ACTIONS_RUNNER_HOOK_JOB_COMPLETED" not in heavy
 
 
 def test_publish_workflow_runs_static_contract_suite() -> None:
@@ -2744,150 +2662,6 @@ def test_deploy_env_file_loads_before_lock_resolution() -> None:
         )
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
-
-
-def test_post_job_hook_does_not_recurse_work_directory() -> None:
-    """The post-job hook MUST NOT recurse into the runner's
-    ``_work`` directory. The bounded cleanup is anchored on the
-    documented ``titan-stocks-playwright-`` project label; any
-    non-Titan checkout, any application development volume, and
-    any unrelated workspace is left alone."""
-    text = _read(POST_JOB_SCRIPT)
-    code_only = "\n".join(
-        line for line in text.splitlines() if not line.lstrip().startswith("#")
-    )
-    assert "find" not in code_only or "find \"$dest\"" in code_only, (
-        "post-job.sh must NOT use `find` to recurse the runner workspace; "
-        "the bounded cleanup operates on the documented project label"
-    )
-    # Defensive: even if a ``find`` slipped in, it must not be
-    # anchored on the ``titan-`` prefix.
-    assert "'titan-*'" not in code_only, (
-        "post-job.sh must NOT use a `titan-*` glob anywhere in executable code"
-    )
-    assert '"titan-*"' not in code_only, (
-        "post-job.sh must NOT use a `titan-*` glob anywhere in executable code"
-    )
-    assert "remove_titan_work_files" not in code_only, (
-        "post-job.sh must NOT define a workspace recursion helper"
-    )
-
-
-def test_post_job_hook_does_not_target_runner_or_app_resources() -> None:
-    """The post-job hook MUST scope its cleanup to the documented
-    ``titan-stocks-playwright-`` Compose project label so the
-    runner container, the runner volumes, the application
-    development volumes, and any unrelated Titan-prefixed
-    workload are never targeted.
-
-    The test stubs ``docker`` in PATH to print a fake
-    ``docker ps -a --filter label=…`` output that contains both
-    matching and non-matching project labels, plus a runner
-    container. The hook MUST filter the output to only the
-    ``titan-stocks-playwright-`` prefix and MUST NOT issue a
-    ``docker rm`` for the runner container or a
-    ``docker volume rm`` for a named runner volume.
-    """
-    import os
-    import stat
-    import subprocess
-    import tempfile
-
-    repo_root = ROOT
-
-    stub_dir = tempfile.mkdtemp()
-    try:
-        # Stub ``docker`` that records every invocation and
-        # returns a deterministic response to the documented
-        # commands.
-        calls_log = os.path.join(stub_dir, "calls.log")
-        with open(calls_log, "w", encoding="utf-8") as log_fh:
-            log_fh.write("")
-
-        docker_stub = os.path.join(stub_dir, "docker")
-        docker_stub_contents = """#!/usr/bin/env bash
-echo "$@" >> "${TITAN_STUB_CALLS:?}"
-case "$1" in
-    ps)
-        # Mimic ``docker ps -a --filter label=... --format '<project>|<volume>'``.
-        printf 'titan-stocks-playwright-smoke-42|titan-stocks-playwright-smoke-42_pg\\n'
-        printf 'titan-stocks-playwright-smoke-42|titan-stocks-playwright-smoke-42_app\\n'
-        printf 'titan-runner|\\n'
-        printf 'titan-app-dev|titan_postgres\\n'
-        ;;
-    compose)
-        # Mimic ``docker compose --project-name <name> down -v``.
-        exit 0
-        ;;
-    volume)
-        exit 0
-        ;;
-    *) exit 0 ;;
-esac
-"""
-        with open(docker_stub, "w", encoding="utf-8") as fh:
-            fh.write(docker_stub_contents)
-        os.chmod(docker_stub, 0o755)
-
-        env = os.environ.copy()
-        env["PATH"] = stub_dir + os.pathsep + env.get("PATH", "/usr/bin:/bin")
-        env["TITAN_STUB_CALLS"] = calls_log
-
-        result = subprocess.run(
-            ["bash", str(repo_root / "scripts" / "post-job.sh")],
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, (
-            f"post-job.sh must exit 0; got {result.returncode} "
-            f"stderr={result.stderr!r}"
-        )
-        with open(calls_log, encoding="utf-8") as fh:
-            calls = fh.read()
-        # The hook must invoke ``docker compose --project-name`` for
-        # the ``titan-stocks-playwright-`` projects only.
-        compose_calls = [
-            line
-            for line in calls.splitlines()
-            if "compose" in line and "down" in line
-        ]
-        assert any(
-            "titan-stocks-playwright-smoke-42" in line for line in compose_calls
-        ), (
-            "post-job.sh must tear down titan-stocks-playwright- projects; "
-            f"compose calls: {compose_calls!r}"
-        )
-        # The runner container and the application development
-        # projects must never be targeted.
-        assert not any("titan-runner" in line for line in compose_calls), (
-            "post-job.sh must NEVER target the runner container; "
-            f"compose calls: {compose_calls!r}"
-        )
-        assert not any("titan-app-dev" in line for line in compose_calls), (
-            "post-job.sh must NEVER target non-CI Titan workloads; "
-            f"compose calls: {compose_calls!r}"
-        )
-        # The volume removal must be limited to the
-        # ``titan-stocks-playwright-`` prefix.
-        volume_calls = [
-            line for line in calls.splitlines() if "volume rm" in line
-        ]
-        for line in volume_calls:
-            assert "titan-stocks-playwright-" in line, (
-                "post-job.sh must only remove volumes belonging to "
-                "titan-stocks-playwright- projects; "
-                f"volume calls: {volume_calls!r}"
-            )
-        # No docker system prune is allowed.
-        assert "docker system prune" not in calls, (
-            "post-job.sh must NEVER invoke `docker system prune`"
-        )
-    finally:
-        import shutil
-
-        shutil.rmtree(stub_dir, ignore_errors=True)
 
 
 def test_publish_workflow_validates_compose_contract() -> None:

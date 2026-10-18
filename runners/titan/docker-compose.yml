@@ -26,7 +26,6 @@ services:
       # unsets it, and then execs the persistent listener.
       RUNNER_TOKEN: ${TITAN_RUNNER_TOKEN:-}
       ACTIONS_RUNNER_HOOK_JOB_STARTED: ${ACTIONS_RUNNER_HOOK_JOB_STARTED:-/var/lib/titan-runner/runtime/.hooks/PreJob.sh}
-      ACTIONS_RUNNER_HOOK_JOB_COMPLETED: ${ACTIONS_RUNNER_HOOK_JOB_COMPLETED:-/var/lib/titan-runner/runtime/.hooks/PostJob.sh}
     volumes:
       # The Docker socket grants substantial host access.
       - /var/run/docker.sock:/var/run/docker.sock

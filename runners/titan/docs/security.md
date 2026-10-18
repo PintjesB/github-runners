@@ -237,39 +237,29 @@ as failed rather than letting it run on a degraded VM. The
 hook never modifies VM state and never reaches out to the
 network.
 
-## Post-job hook
+## Lifecycle and Playwright cleanup
 
-`PostJob.sh` is wired through the documented
-`ACTIONS_RUNNER_HOOK_JOB_COMPLETED` environment variable. It
-performs a bounded cleanup after every workflow job:
+The Titan heavy runner deliberately **does not install or enable a
+post-job cleanup hook**. GitHub's completed-job callback has no reliable
+ownership boundary for unrelated Compose projects sharing the same
+Docker daemon. Enumerating every `titan-stocks-playwright-*` project
+and forcing `docker rm -f` could destroy an active concurrent job.
 
-* It tears down Compose projects whose name matches the
-  documented Titan CI prefix `titan-stocks-playwright-` only,
-  identified through the `com.docker.compose.project` label.
-  `docker compose down -v` removes each project's containers,
-  its bridge network, and its project-owned volumes; external
-  runner volumes are never removed.
-* It removes anonymous Docker volumes whose
-  `com.docker.compose.project` label matches the same prefix
-  (defensive catch-all for volumes whose owning container was
-  force-removed without a matching `docker compose down`).
-* It does NOT recurse into the runner's `_work` directory.
-  The bounded cleanup only targets the matching Compose
-  projects (anchored on the documented
-  `titan-stocks-playwright-` prefix); any non-Titan checkout,
-  any application development volume, and any unrelated
-  workspace is left alone.
-* The runner container itself (`titan-runner`), the
-  persistent `titan-runner-state`, `titan-runner-work`, and
-  `titan-runner-browser` named volumes, the application
-  `titan_postgres` and `titan_data` named volumes, and any
-  non-CI Titan workload are untouched.
-* It never invokes `docker system prune`, `docker volume
-  prune`, `docker image prune`, `docker builder prune`, or
-  `docker network prune`.
-* A cleanup failure is logged but never fails the workflow
-  job; the hook exits zero unless something fundamentally
-  unsafe happens.
+The Titan Stocks Playwright launcher owns its disposable Compose project
+and uses an `EXIT` trap to run `docker compose -f docker-compose.yml
+-f docker-compose.e2e.yml --env-file <temporary-file> down -v`. This
+remains the primary and automatic teardown for normal completion and
+ordinary failures. It is not guaranteed to run after `SIGKILL`, a
+runner/VM crash, or power loss.
+
+Interrupted runs might leave project-scoped Docker resources behind.
+Operators should inspect them and confirm they are inactive and no
+longer owned by a live job **before** manually removing any containers,
+volumes, or networks. Do not issue a blanket project-prefix sweep,
+`docker system prune`, or any other global Docker prune from CI.
+Persistent runner state/work/browser/cache volumes are never part of
+Playwright cleanup.
+
 
 ## Lifecycle lock
 

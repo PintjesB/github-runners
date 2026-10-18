@@ -27,8 +27,8 @@
 #     native runner architecture.
 #   * ``deploy.sh`` rejects unknown subcommands and exposes only the
 #     single-container lifecycle commands.
-#   * ``pre-job.sh`` and ``post-job.sh`` exist, are executable,
-#     and contain the documented contract.
+#   * ``pre-job.sh`` exists and validates host capabilities;
+#     no shared-daemon post-job cleanup hook is installed.
 
 set -uo pipefail
 
@@ -374,23 +374,10 @@ test_pre_job_hook_rejects_unsupported_runner_arch() {
     ok "pre-job rejects unsupported RUNNER_ARCH"
 }
 
-test_post_job_hook_is_bounded() {
-    [ -x "$SCRIPTS_DIR/post-job.sh" ] \
-        || { echo "FAIL post-job.sh must be executable" >&2; exit 1; }
-    # Strip comments so the "must NOT invoke" assertions only see
-    # executable code, not the documented negation.
-    local text
-    text="$(grep -v '^[[:space:]]*#' "$SCRIPTS_DIR/post-job.sh")"
-    assert_contains "$text" "titan-" \
-        "post-job.sh scopes cleanup to a titan- prefix"
-    # Forbidden operations must never appear in the hook body.
-    for marker in "docker system prune" "docker volume prune" "docker image prune"; do
-        if [[ "$text" == *"$marker"* ]]; then
-            echo "FAIL post-job.sh must NOT invoke $marker" >&2
-            exit 1
-        fi
-    done
-    ok "post-job.sh never runs a global prune"
+test_post_job_hook_is_absent() {
+    [ ! -e "$SCRIPTS_DIR/post-job.sh" ] ||
+        { echo "FAIL post-job.sh must not be installed (unsafe cross-job cleanup)" >&2; exit 1; }
+    ok "No post-job cleanup hook can sweep active Playwright projects"
 }
 
 main() {
@@ -413,7 +400,7 @@ main() {
     test_pre_job_hook_exists_and_is_executable
     test_pre_job_hook_rejects_missing_runner_arch
     test_pre_job_hook_rejects_unsupported_runner_arch
-    test_post_job_hook_is_bounded
+    test_post_job_hook_is_absent
     echo "all runner shell tests passed"
 }
 
