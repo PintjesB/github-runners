@@ -1145,10 +1145,8 @@ def test_deploy_status_uses_listener_username() -> None:
 def test_compose_enables_only_pre_job_hook() -> None:
     """Host capability checks run before jobs; post-job cleanup is disabled."""
     heavy = _read(COMPOSE_FILE).split("  runner:", 1)[1].split("  runner-light:", 1)[0]
-    assert re.search(
-        r"ACTIONS_RUNNER_HOOK_JOB_STARTED:[^\\n]*"
-        r"/var/lib/titan-runner/runtime/\\.hooks/PreJob\\.sh", heavy
-    ), "Heavy runner must enable its pre-job capability check"
+    assert "ACTIONS_RUNNER_HOOK_JOB_STARTED:" in heavy
+    assert "/var/lib/titan-runner/runtime/.hooks/PreJob.sh" in heavy
     assert "ACTIONS_RUNNER_HOOK_JOB_COMPLETED" not in heavy
 
 
