@@ -11,7 +11,7 @@
 #              ``tests/test_runner_contract.py``.
 #   PyYAML     Loads ``.github/workflows/publish.yml`` so the
 #              contract tests can assert on the workflow structure.
-pytest==9.1.1
+pytest==9.2.0
 PyYAML==6.0.3
 
 # Real TLS/JWT fixtures for evidence client and service.
