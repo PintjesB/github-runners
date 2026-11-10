@@ -10,11 +10,18 @@ case "$(uname -m)" in
 esac
 [ "$actual_arch" = "$EXPECTED_ARCH" ] || { echo "architecture mismatch" >&2; exit 1; }
 
-for bin in bash curl git jq gh docker shellcheck node npm python3; do
+for bin in bash curl git jq gh docker shellcheck node npm python3 psql; do
     command -v "$bin" >/dev/null || { echo "missing $bin" >&2; exit 1; }
 done
 docker compose version
 docker buildx version
+# Ubuntu 24.04 provides PostgreSQL client 16 on both amd64 and arm64.
+# A mismatched or missing psql fails the native image probe before publishing.
+psql_version="$(psql --version)"
+case "$psql_version" in
+    *" 16."*) ;;
+    *) echo "unexpected PostgreSQL client version: $psql_version" >&2; exit 1 ;;
+esac
 # Verify the actual installed binary, not just Dockerfile source or a tag.
 # The 1.0.0 published image was still built with Runner 2.336.0 even after
 # the source was upgraded. Reject a stale or mismatched binary at CI build time.
