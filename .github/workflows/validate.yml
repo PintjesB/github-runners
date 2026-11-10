@@ -3,6 +3,15 @@ name: validate-runner-profiles
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Restrict manually dispatched validation to one runner profile
+        type: choice
+        required: false
+        default: all
+        options:
+          - all
+          - general
 
 concurrency:
   group: validate-runners-${{ github.event.pull_request.number || github.ref_name }}
@@ -33,14 +42,20 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_PROFILE: ${{ inputs.profile || 'all' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$REQUESTED_PROFILE" = general ]; then
+              selected='["general"]'
+            else
+              selected='["titan","oportunist","general"]'
+            fi
             {
-              echo 'profiles=["titan","oportunist","general"]'
+              echo "profiles=$selected"
               echo 'has_profiles=true'
             } >> "$GITHUB_OUTPUT"
             exit 0
