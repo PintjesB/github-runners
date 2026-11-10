@@ -60,7 +60,7 @@ jobs:
           gh workflow run validate.yml --ref "$branch" -f profile=general
 
           run_id=""
-          for attempt in $(seq 1 40); do
+          for _ in $(seq 1 40); do
             run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/validate.yml/runs?branch=$branch&event=workflow_dispatch&per_page=5" --jq '.workflow_runs[0].id // empty' || true)"
             if [[ "$run_id" =~ ^[0-9]+$ ]]; then break; fi
             sleep 10
@@ -72,7 +72,7 @@ jobs:
 
           # Never merge on queued, failed, cancelled or timed-out validation.
           passed=false
-          for attempt in $(seq 1 180); do
+          for _ in $(seq 1 180); do
             result="$(gh run view "$run_id" --json status,conclusion)"
             status="$(jq -r '.status' <<<"$result")"
             conclusion="$(jq -r '.conclusion // empty' <<<"$result")"
