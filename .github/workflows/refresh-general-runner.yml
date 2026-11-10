@@ -1,0 +1,103 @@
+name: Refresh upstream general runner
+
+on:
+  schedule:
+    # Daily, after upstream releases are likely to have finished publishing.
+    - cron: "17 06 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: refresh-general-runner
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Pin, validate, merge and publish supported runner release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 105
+    steps:
+      - name: Check out trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: true
+      - name: Resolve upstream stable version and both SHA256 assets
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 runners/general/scripts/sync_upstream.py --write
+      - name: Propose and verify updated runner
+        if: steps.upstream.outputs.updated == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_VERSION: ${{ steps.upstream.outputs.version }}
+        run: |
+          set -euo pipefail
+          branch="automation/runner-v$(printf '%s' "$TARGET_VERSION" | tr '.' '-')"
+          # A prior failure must remain visible, not be overwritten by a timer.
+          if git ls-remote --heads origin "$branch" | grep -q .; then
+            echo "::error::Update branch $branch already exists. Review the previous run/PR."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add runners/general/Dockerfile
+          git commit -m "chore(general): pin official runner $TARGET_VERSION and both digests"
+          git push -u origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "chore(general): update GitHub Actions runner to $TARGET_VERSION" \
+            --body "Automated upstream release update. Version and both ARM64/X64 SHA256 digests come from official GitHub release-asset metadata. CI must validate the exact branch head and both native platforms before merge. Major upgrades remain manual. The publisher is dispatched separately because GITHUB_TOKEN-initiated merges do not trigger push workflows."
+
+          # GitHub does not trigger pull_request workflows for PRs created with
+          # GITHUB_TOKEN. workflow_dispatch is an explicit supported exception.
+          gh workflow run validate.yml --ref "$branch" -f profile=general
+
+          run_id=""
+          for attempt in $(seq 1 40); do
+            run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/validate.yml/runs?branch=$branch&event=workflow_dispatch&per_page=5" --jq '.workflow_runs[0].id // empty' || true)"
+            if [[ "$run_id" =~ ^[0-9]+$ ]]; then break; fi
+            sleep 10
+          done
+          if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not identify the dispatched validation run"
+            exit 1
+          fi
+
+          # Never merge on queued, failed, cancelled or timed-out validation.
+          passed=false
+          for attempt in $(seq 1 180); do
+            result="$(gh run view "$run_id" --json status,conclusion)"
+            status="$(jq -r '.status' <<<"$result")"
+            conclusion="$(jq -r '.conclusion // empty' <<<"$result")"
+            if [[ "$status" == completed ]]; then
+              if [[ "$conclusion" != success ]]; then
+                echo "::error::Runner validation $run_id concluded $conclusion"
+                exit 1
+              fi
+              passed=true
+              break
+            fi
+            sleep 15
+          done
+          if [[ "$passed" != true ]]; then
+            echo "::error::Runner validation $run_id did not complete successfully"
+            exit 1
+          fi
+          echo "Native runner validation succeeded: run $run_id"
+
+          # Branch protection or required reviews can still refuse this merge.
+          # In that case the PR remains open and no publish is attempted.
+          gh pr merge "$branch" --squash --delete-branch
+
+          # A merge by GITHUB_TOKEN cannot trigger on: push publishing workflows.
+          # Explicit dispatch still triggers the existing attested multiarch
+          # publish pipeline, which alone promotes the image to GHCR.
+          gh workflow run publish-general.yml --ref main
+          echo "Published-image workflow dispatched after validated merge"
