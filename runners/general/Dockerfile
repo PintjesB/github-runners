@@ -20,7 +20,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       bash ca-certificates coreutils curl file git gnupg gzip gosu jq lsb-release \
       shellcheck tini tar unzip wget xz-utils zip \
-      python3 python3-pip python3-venv \
+      python3 python3-pip python3-venv postgresql-client \
  && rm -rf /var/lib/apt/lists/*
 
 # Install Docker client plugins only. No dockerd, containerd or host socket.
