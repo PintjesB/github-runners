@@ -15,6 +15,22 @@ for bin in bash curl git jq gh docker shellcheck node npm python3; do
 done
 docker compose version
 docker buildx version
+# Verify the actual installed binary, not just Dockerfile source or a tag.
+# The 1.0.0 published image was still built with Runner 2.336.0 even after
+# the source was upgraded. Reject a stale or mismatched binary at CI build time.
+: "${RUNNER_VERSION:?RUNNER_VERSION must be set by the image}"
+runner_bin="${RUNNER_ROOT:-/opt/actions-runner}/bin/Runner.Listener"
+[ -x "$runner_bin" ] || { echo "missing runner listener: $runner_bin" >&2; exit 1; }
+installed_version="$("$runner_bin" --version)"
+[ "$installed_version" = "$RUNNER_VERSION" ] || {
+    printf 'installed runner %s differs from image RUNNER_VERSION %s\n' "$installed_version" "$RUNNER_VERSION" >&2
+    exit 1
+}
+minimum_version=2.338.2
+[ "$(printf '%s\n' "$minimum_version" "$installed_version" | sort -V | head -n 1)" = "$minimum_version" ] || {
+    printf 'refusing deprecated GitHub runner %s (minimum %s)\n' "$installed_version" "$minimum_version" >&2
+    exit 1
+}
 [ "$(node -p 'process.versions.node.split(".")[0]')" = 24 ]
 python3 -c 'import sys; assert sys.version_info >= (3, 12)'
 work="$(mktemp -d)"
