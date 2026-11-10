@@ -244,12 +244,11 @@
     }
   ],
   "customManagers": [
-
     {
       "customType": "regex",
-      "description": "Track the GitHub Actions runner version baked into all runner images",
+      "description": "Keep heavyweight Oportunist/Titan runner upgrades approval-gated; general runner is handled by the SHA-verified scheduled updater",
       "managerFilePatterns": [
-        "/^runners\\/(?:general|oportunist|titan)\\/Dockerfile$/"
+        "/^runners\\/(?:oportunist|titan)\\/Dockerfile$/"
       ],
       "matchStrings": [
         "ARG RUNNER_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
