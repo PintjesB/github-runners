@@ -1,9 +1,9 @@
 # General-purpose runner
 
 Reusable Ubuntu 24.04 GitHub Actions runner for lightweight repository CI.
-Includes Python 3.12, Node.js 24, Git, GitHub CLI, ShellCheck and the Docker
-client with Compose and Buildx. No Codex, browser, PostgreSQL client,
-Docker daemon or host Docker socket.
+Includes Python 3.12, Node.js 24, Git, GitHub CLI, ShellCheck, PostgreSQL
+client 16 (`psql`) and the Docker client with Compose and Buildx. No Codex,
+browser, Docker daemon or host Docker socket.
 
 The image supports both amd64 and arm64 and uses a persistent GitHub runner
 identity with separate state, work and package-cache volumes.
