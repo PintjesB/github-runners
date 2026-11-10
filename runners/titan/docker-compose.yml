@@ -52,7 +52,7 @@ services:
   # Requires general-runner PR #61 merged and its image published before deployment.
   # Requires Titan #294 and Oportunist #166 (native actionlint) merged first.
   runner-light:
-    image: ${TITAN_RUNNER_LIGHT_IMAGE:-ghcr.io/pintjesb/general-runner:1.0.3}
+    image: ${TITAN_RUNNER_LIGHT_IMAGE:-ghcr.io/pintjesb/general-runner:1.0.4}
     profiles: [ci-light]
     container_name: titan-runner-light
     restart: always
