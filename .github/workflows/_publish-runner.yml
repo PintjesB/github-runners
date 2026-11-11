@@ -39,7 +39,7 @@ jobs:
           fi
       - name: Run profile contract
         working-directory: runners/${{ inputs.profile }}
-        run: ./ci-contract.sh
+        run: bash ./ci-contract.sh
 
   build:
     name: Build and probe ${{ inputs.profile }} ${{ matrix.platform }}
@@ -105,12 +105,13 @@ jobs:
       - name: Probe native candidate
         env:
           IMAGE: ${{ inputs.image }}
+          PROFILE: ${{ inputs.profile }}
           EXPECTED_ARCH: ${{ matrix.expected_arch }}
         run: |
           set -euo pipefail
           digest="$(tr -d '[:space:]' < "$RUNNER_TEMP/candidate-digest.txt")"
           socket_args=()
-          if [ "${{ inputs.profile }}" != general ]; then
+          if [ "$PROFILE" = titan ] || [ "$PROFILE" = oportunist ]; then
             socket_args+=(-v /var/run/docker.sock:/var/run/docker.sock)
           fi
           docker run --rm --platform "${{ matrix.platform }}" \
@@ -323,13 +324,14 @@ jobs:
       - name: Probe merged image
         env:
           IMAGE: ${{ inputs.image }}
+          PROFILE: ${{ inputs.profile }}
           EXPECTED_ARCH: ${{ matrix.expected_arch }}
         run: |
           set -euo pipefail
           digest="$(tr -d '[:space:]' < "$RUNNER_TEMP/merged-digest.txt")"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
           socket_args=()
-          if [ "${{ inputs.profile }}" != general ]; then
+          if [ "$PROFILE" = titan ] || [ "$PROFILE" = oportunist ]; then
             socket_args+=(-v /var/run/docker.sock:/var/run/docker.sock)
           fi
           docker run --rm --platform "${{ matrix.platform }}" \
