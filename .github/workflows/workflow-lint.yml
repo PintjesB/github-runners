@@ -21,7 +21,7 @@ permissions:
 jobs:
   actionlint:
     name: Lint GitHub Actions workflows
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Check out repository
@@ -55,15 +55,10 @@ jobs:
             --output "${archive}"
           printf '%s  %s\n' "${expected_sha}" "${archive}" | sha256sum --check
           tar -xzf "${archive}" -C "${RUNNER_TEMP}" actionlint
-          # The previous pinned Docker image shipped both analyzers.
-          # Require them explicitly so moving to a native binary does not weaken checks.
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends shellcheck python3-pyflakes
-          command -v shellcheck
-          /usr/bin/python3 -m pyflakes --version
-          # Ubuntu exposes Pyflakes as a module, not consistently as `pyflakes`.
-          printf '%s\n' '#!/bin/sh' 'exec /usr/bin/python3 -m pyflakes "$@"' > "${RUNNER_TEMP}/pyflakes"
-          chmod 0755 "${RUNNER_TEMP}/pyflakes"
-          export PATH="${RUNNER_TEMP}:${PATH}"
-          command -v pyflakes
-          "${RUNNER_TEMP}/actionlint" -color
+          shellcheck_path="$(command -v shellcheck)"
+          python3 -m venv "${RUNNER_TEMP}/lint-venv"
+          printf '%s\n' 'pyflakes==3.4.0 --hash=sha256:f742a7dbd0d9cb9ea41e9a24a918996e8170c799fa528688d40dd582c8265f4f' > "${RUNNER_TEMP}/lint-requirements.txt"
+          "${RUNNER_TEMP}/lint-venv/bin/python" -m pip install --disable-pip-version-check \
+            --only-binary=:all: --require-hashes --no-deps -r "${RUNNER_TEMP}/lint-requirements.txt"
+          "${RUNNER_TEMP}/actionlint" -color \
+            -shellcheck "$shellcheck_path" -pyflakes "${RUNNER_TEMP}/lint-venv/bin/pyflakes"
