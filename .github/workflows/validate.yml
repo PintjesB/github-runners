@@ -12,7 +12,6 @@ on:
         options:
           - all
           - general
-          - selector
 
 concurrency:
   group: validate-runners-${{ github.event.pull_request.number || github.ref_name }}
@@ -50,10 +49,10 @@ jobs:
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$REQUESTED_PROFILE" = general ] || [ "$REQUESTED_PROFILE" = selector ]; then
+            if [ "$REQUESTED_PROFILE" = general ]; then
               selected="$(printf '[\"%s\"]' "$REQUESTED_PROFILE")"
             else
-              selected='["titan","oportunist","general","selector"]'
+              selected='["titan","oportunist","general"]'
             fi
             {
               echo "profiles=$selected"
@@ -68,7 +67,6 @@ jobs:
           titan=false
           oportunist=false
           general=false
-          selector=false
 
           if printf '%s\n' "$files" | grep -E '^runners/titan/' >/dev/null; then
             titan=true
@@ -79,24 +77,19 @@ jobs:
           if printf '%s\n' "$files" | grep -E '^runners/general/' >/dev/null; then
             general=true
           fi
-          if printf '%s\n' "$files" | grep -E '^runners/selector/' >/dev/null; then
-            selector=true
-          fi
           # Metadata-only workflows cannot affect runner image capabilities.
-          # Unexpected workflow changes still validate both profiles.
+          # Unexpected workflow changes validate all maintained runner profiles.
           if printf '%s\n' "$files" | grep -E '^\.github/workflows/' \
               | grep -Ev '^\.github/workflows/(renovate-config|workflow-lint|sync-renovate-labels|_sync-renovate-merge-labels)\.yml$' >/dev/null; then
             titan=true
             oportunist=true
             general=true
-            selector=true
           fi
 
           selected=()
           if [ "$titan" = true ]; then selected+=('"titan"'); fi
           if [ "$oportunist" = true ]; then selected+=('"oportunist"'); fi
           if [ "$general" = true ]; then selected+=('"general"'); fi
-          if [ "$selector" = true ]; then selected+=('"selector"'); fi
           if [ "${#selected[@]}" -gt 0 ]; then
             profiles="[$(IFS=,; echo "${selected[*]}")]"
           else
