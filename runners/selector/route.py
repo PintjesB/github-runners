@@ -7,7 +7,6 @@ import re
 import sys
 import time
 from http.client import HTTPException
-from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
@@ -79,10 +78,9 @@ def main():
         runner_name = os.environ.get("RUNNER_SELECTOR_NAME", SELF_HOSTED)
         if not runner_name.strip():
             raise ValueError("RUNNER_SELECTOR_NAME cannot be empty.")
-        token_file = Path(os.environ.get("RUNNER_SELECTOR_TOKEN_FILE", "/run/secrets/github-token"))
-        token = token_file.read_text(encoding="utf-8").strip()
+        token = os.environ.get("RUNNER_SELECTOR_TOKEN", "").strip()
         if not token:
-            raise ValueError("Runner selector token is empty.")
+            raise ValueError("RUNNER_SELECTOR_TOKEN is empty or missing.")
     except (OSError, ValueError, KeyError) as error:
         print(f"Cannot configure runner selector: {error}", file=sys.stderr)
         return 1
