@@ -35,7 +35,7 @@ jobs:
       - name: Set up current Node LTS
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "lts/*"
+          node-version: "24"
           package-manager-cache: false
 
       - name: Install Renovate validator once
@@ -63,6 +63,13 @@ jobs:
           const { applyPackageRules } = await load('util/package-rules/index.js');
           const { resolveConfigPresets } = await load('config/presets/index.js');
           const raw = JSON.parse(fs.readFileSync('renovate.json', 'utf8'));
+          assert.deepEqual(raw.automergeSchedule, ['* 3-4 * * *']);
+          assert.equal(raw.timezone, 'Europe/Brussels');
+          assert.equal(raw.prHourlyLimit, 6);
+          assert.equal(raw.prConcurrentLimit, 12);
+          assert.equal(raw.branchConcurrentLimit, 16);
+          assert.equal(raw.platformAutomerge, false);
+          assert.equal(raw.ignoreTests, false);
           const resolved = await resolveConfigPresets(raw);
           const config = resolved.config ?? resolved;
           const cases = [];
