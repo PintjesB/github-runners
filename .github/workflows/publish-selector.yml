@@ -1,0 +1,41 @@
+name: publish-selector
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'runners/selector/**'
+      - '.github/workflows/_publish-runner.yml'
+      - '.github/workflows/_tag-semver.yml'
+      - '.github/workflows/publish-selector.yml'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publish-selector-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: ./.github/workflows/_publish-runner.yml
+    with:
+      profile: selector
+      image: ghcr.io/pintjesb/runner-selector
+
+  version:
+    needs: publish
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_tag-semver.yml
+    with:
+      profile: selector
+      image: ghcr.io/pintjesb/runner-selector

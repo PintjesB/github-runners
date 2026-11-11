@@ -16,8 +16,17 @@ ENV LANG=C.UTF-8 \
     RUNNER_SHA256_ARM64=$RUNNER_SHA256_ARM64 \
     RUNNER_SHA256_X64=$RUNNER_SHA256_X64
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
+# Keep the Ubuntu signing key and package suites when the default mirrors are unreachable.
+RUN set -e; \
+    if ! apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=8 -o APT::Update::Error-Mode=any update; then \
+      sed -i \
+        -e 's|://archive\.ubuntu\.com/ubuntu|://mirrors.mit.edu/ubuntu|g' \
+        -e 's|://security\.ubuntu\.com/ubuntu|://mirrors.mit.edu/ubuntu|g' \
+        -e 's|://ports\.ubuntu\.com/ubuntu-ports|://mirrors.mit.edu/ubuntu-ports|g' \
+        /etc/apt/sources.list.d/ubuntu.sources; \
+      apt-get -o APT::Update::Error-Mode=any update; \
+    fi; \
+    apt-get install -y --no-install-recommends \
       bash ca-certificates coreutils curl file git gnupg gzip gosu jq lsb-release \
       shellcheck tini tar unzip wget xz-utils zip \
       python3 python3-pip python3-venv postgresql-client \
