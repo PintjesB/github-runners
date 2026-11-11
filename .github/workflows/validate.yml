@@ -12,6 +12,7 @@ on:
         options:
           - all
           - general
+          - selector
 
 concurrency:
   group: validate-runners-${{ github.event.pull_request.number || github.ref_name }}
@@ -49,10 +50,10 @@ jobs:
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$REQUESTED_PROFILE" = general ]; then
-              selected='["general"]'
+            if [ "$REQUESTED_PROFILE" = general ] || [ "$REQUESTED_PROFILE" = selector ]; then
+              selected="$(printf '[\"%s\"]' "$REQUESTED_PROFILE")"
             else
-              selected='["titan","oportunist","general"]'
+              selected='["titan","oportunist","general","selector"]'
             fi
             {
               echo "profiles=$selected"
@@ -67,6 +68,7 @@ jobs:
           titan=false
           oportunist=false
           general=false
+          selector=false
 
           if printf '%s\n' "$files" | grep -E '^runners/titan/' >/dev/null; then
             titan=true
@@ -77,6 +79,9 @@ jobs:
           if printf '%s\n' "$files" | grep -E '^runners/general/' >/dev/null; then
             general=true
           fi
+          if printf '%s\n' "$files" | grep -E '^runners/selector/' >/dev/null; then
+            selector=true
+          fi
           # Metadata-only workflows cannot affect runner image capabilities.
           # Unexpected workflow changes still validate both profiles.
           if printf '%s\n' "$files" | grep -E '^\.github/workflows/' \
@@ -84,12 +89,14 @@ jobs:
             titan=true
             oportunist=true
             general=true
+            selector=true
           fi
 
           selected=()
           if [ "$titan" = true ]; then selected+=('"titan"'); fi
           if [ "$oportunist" = true ]; then selected+=('"oportunist"'); fi
           if [ "$general" = true ]; then selected+=('"general"'); fi
+          if [ "$selector" = true ]; then selected+=('"selector"'); fi
           if [ "${#selected[@]}" -gt 0 ]; then
             profiles="[$(IFS=,; echo "${selected[*]}")]"
           else
@@ -138,7 +145,7 @@ jobs:
 
       - name: Run profile contract
         working-directory: runners/${{ matrix.profile }}
-        run: ./ci-contract.sh
+        run: bash ./ci-contract.sh
 
   native-images:
     name: Probe ${{ matrix.profile }} ${{ matrix.arch }}
@@ -184,7 +191,7 @@ jobs:
           PROFILE: ${{ matrix.profile }}
         run: |
           socket_args=()
-          if [ "$PROFILE" != general ]; then
+          if [ "$PROFILE" = titan ] || [ "$PROFILE" = oportunist ]; then
             socket_args+=(-v /var/run/docker.sock:/var/run/docker.sock)
           fi
           docker run --rm --entrypoint /usr/local/bin/probe \
