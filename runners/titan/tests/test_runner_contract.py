@@ -99,10 +99,10 @@ DEPLOY_ALLOWLIST_KEYS = {
 # in the Dockerfile so the multi-platform image can be built on
 # every supported native architecture.
 RUNNER_SHA256_ARM64 = (
-    "58b758e420b87093fbd4bfddd368074960053e2f1388f01848c82624b90f27d1"
+    "670adb2f268fe21dcbb58b3db0e0aa9d5b3bddfe2c651481336e561ff86de945"
 )
 RUNNER_SHA256_X64 = (
-    "04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d"
+    "baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40"
 )
 
 
