@@ -19,7 +19,7 @@ jobs:
   refresh:
     name: Pin, validate, merge and publish supported runner release
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 105
     steps:
       - name: Check out trusted main
