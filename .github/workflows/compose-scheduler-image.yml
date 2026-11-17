@@ -47,7 +47,7 @@ jobs:
 
   publish:
     name: Publish pinned multiarch image
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 30
