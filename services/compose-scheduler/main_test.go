@@ -133,3 +133,46 @@ func TestConfigurationRequiresSecretAndRole(t *testing.T) {
 	cfg,err:=readConfig()
 	if err!=nil || cfg.tokenFile!=f {t.Fatalf("cfg=%+v error=%v",cfg,err)}
 }
+
+func TestStandbyDispatchesWhenPrimaryAbsent(t *testing.T) {
+	posts := 0
+	g, closeServer := githubForTest(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			posts++
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		fmt.Fprint(w, `{"workflow_runs":[]}`)
+	})
+	defer closeServer()
+	now := tm("2026-11-17T03:03:15+01:00")
+	s := &scheduler{
+		cfg: config{role: "standby"}, api: g,
+		log: slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
+		clock: func() time.Time { return now },
+	}
+	s.tick(context.Background(), now)
+	s.tick(context.Background(), now.Add(10*time.Second))
+	if posts != 1 {
+		t.Fatalf("expected exactly one failover dispatch, got %d", posts)
+	}
+}
+
+func TestOutsideWindowNeverContactsGitHub(t *testing.T) {
+	requests := 0
+	g, closeServer := githubForTest(t, func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusOK)
+	})
+	defer closeServer()
+	now := tm("2026-11-17T05:02:10+01:00")
+	s := &scheduler{
+		cfg: config{role: "primary"}, api: g,
+		log: slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
+		clock: func() time.Time { return now },
+	}
+	s.tick(context.Background(), now)
+	if requests != 0 {
+		t.Fatal("out-of-window scheduler contacted GitHub")
+	}
+}
