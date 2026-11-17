@@ -38,6 +38,7 @@ type config struct {
 	role string
 	tokenFile string
 	apiURL string
+	smokeAt time.Time
 }
 
 func readConfig() (config, error) {
@@ -52,7 +53,13 @@ func readConfig() (config, error) {
 	if strings.TrimSpace(string(secret)) == "" {
 		return config{}, errors.New("GitHub token file is empty")
 	}
-	return config{role: role, tokenFile: tokenFile, apiURL: "https://api.github.com"}, nil
+	var smokeAt time.Time
+	if raw := os.Getenv("SCHEDULER_SMOKE_AT"); raw != "" {
+		smokeAt, err = time.Parse(time.RFC3339, raw)
+		if err != nil { return config{}, fmt.Errorf("invalid SCHEDULER_SMOKE_AT: %w", err) }
+		// A smoke trigger is a one-time dry run, never a production merge.
+	}
+	return config{role: role, tokenFile: tokenFile, apiURL: "https://api.github.com", smokeAt: smokeAt}, nil
 }
 
 // slot calculates the primary's Brussels-local slot for both processes.
@@ -151,15 +158,59 @@ func (g *github) dispatch(ctx context.Context, t time.Time) error {
 	return nil
 }
 
+// dispatchSmoke is intentionally hardwired to dry_run=true and
+// scheduler_dispatch=false. It cannot request a merge or window override.
+func (g *github) dispatchSmoke(ctx context.Context, at time.Time) error {
+	body, err := json.Marshal(map[string]any{
+		"ref": branch,
+		"inputs": map[string]string{
+			"dry_run": "true",
+			"scheduler_dispatch": "false",
+			"schedule_slot": "smoke-" + at.Format(time.RFC3339),
+		},
+	})
+	if err != nil { return err }
+	resp, err := g.request(ctx, http.MethodPost, endpoint()+"/dispatches", strings.NewReader(string(body)))
+	if err != nil { return err }
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("GitHub smoke dispatch: HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func smokeDue(now, at time.Time, role string) bool {
+	return role == "primary" && !at.IsZero() && !now.Before(at) && now.Before(at.Add(45*time.Second))
+}
+
 type scheduler struct {
 	cfg config
 	api *github
 	log *slog.Logger
 	lastSlot string
+	lastSmoke string
 	clock func() time.Time
 }
 
 func (s *scheduler) tick(ctx context.Context, now time.Time) {
+	// Separate short-lived diagnostic trigger: one dry-run-only dispatch.
+	// It never changes the normal overnight scheduling decisions.
+	if smokeDue(now, s.cfg.smokeAt, s.cfg.role) {
+		key := s.cfg.smokeAt.Format(time.RFC3339)
+		if s.lastSmoke != key {
+			s.lastSmoke = key
+			smokeCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
+			err := s.api.dispatchSmoke(smokeCtx, s.cfg.smokeAt)
+			cancel()
+			if err != nil {
+				s.log.Error("smoke dispatch failed", "scheduled_at", key, "error", err)
+			} else {
+				s.log.Info("smoke dry-run workflow dispatched", "scheduled_at", key,
+					"dispatched_at", time.Now().Format(time.RFC3339Nano),
+					"role", s.cfg.role)
+			}
+		}
+	}
 	t, ready := slot(now, s.cfg.role)
 	if !ready { return }
 	id := slotID(t)
@@ -217,6 +268,9 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("scheduler started", "role", cfg.role, "timezone", "Europe/Brussels", "repository", repository)
+	if !cfg.smokeAt.IsZero() {
+		logger.Info("one-shot dry-run diagnostic configured", "at", cfg.smokeAt.Format(time.RFC3339), "role", cfg.role)
+	}
 	client := &http.Client{Timeout: 20*time.Second}
 	s := &scheduler{cfg: cfg, api: &github{http: client, root: cfg.apiURL, tokenFile: cfg.tokenFile}, log: logger}
 	if probe {
