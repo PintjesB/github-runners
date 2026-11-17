@@ -49,6 +49,11 @@ func parseStartTime(raw string) (int, error) {
 	if len(raw) != 5 || raw[2] != ':' {
 		return 0, fmt.Errorf("SCHEDULER_START_TIME must be HH:MM, got %q", raw)
 	}
+	for _, index := range []int{0, 1, 3, 4} {
+		if raw[index] < '0' || raw[index] > '9' {
+			return 0, fmt.Errorf("SCHEDULER_START_TIME must use decimal digits, got %q", raw)
+		}
+	}
 	hour, hourErr := strconv.Atoi(raw[:2])
 	minute, minuteErr := strconv.Atoi(raw[3:])
 	if hourErr != nil || minuteErr != nil || hour < 0 || hour > 23 || minute < 0 || minute > 59 {
