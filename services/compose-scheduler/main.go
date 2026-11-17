@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"strconv"
 	"time"
 	_ "time/tzdata"
 )
@@ -39,6 +40,30 @@ type config struct {
 	tokenFile string
 	apiURL string
 	smokeAt time.Time
+	startMinute int
+}
+
+// parseStartTime accepts an unambiguous Brussels-local HH:MM start time.
+func parseStartTime(raw string) (int, error) {
+	if raw == "" { raw = "03:00" }
+	if len(raw) != 5 || raw[2] != ':' {
+		return 0, fmt.Errorf("SCHEDULER_START_TIME must be HH:MM, got %q", raw)
+	}
+	for _, index := range []int{0, 1, 3, 4} {
+		if raw[index] < '0' || raw[index] > '9' {
+			return 0, fmt.Errorf("SCHEDULER_START_TIME must use decimal digits, got %q", raw)
+		}
+	}
+	hour, hourErr := strconv.Atoi(raw[:2])
+	minute, minuteErr := strconv.Atoi(raw[3:])
+	if hourErr != nil || minuteErr != nil || hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+		return 0, fmt.Errorf("SCHEDULER_START_TIME must be a valid 24-hour HH:MM, got %q", raw)
+	}
+	return hour*60 + minute, nil
+}
+
+func startTimeText(startMinute int) string {
+	return fmt.Sprintf("%02d:%02d", startMinute/60, startMinute%60)
 }
 
 func readConfig() (config, error) {
@@ -53,27 +78,36 @@ func readConfig() (config, error) {
 	if strings.TrimSpace(string(secret)) == "" {
 		return config{}, errors.New("GitHub token file is empty")
 	}
+	startMinute, err := parseStartTime(os.Getenv("SCHEDULER_START_TIME"))
+	if err != nil { return config{}, err }
 	var smokeAt time.Time
 	if raw := os.Getenv("SCHEDULER_SMOKE_AT"); raw != "" {
 		smokeAt, err = time.Parse(time.RFC3339, raw)
 		if err != nil { return config{}, fmt.Errorf("invalid SCHEDULER_SMOKE_AT: %w", err) }
 		// A smoke trigger is a one-time dry run, never a production merge.
 	}
-	return config{role: role, tokenFile: tokenFile, apiURL: "https://api.github.com", smokeAt: smokeAt}, nil
+	return config{role: role, tokenFile: tokenFile, apiURL: "https://api.github.com", smokeAt: smokeAt, startMinute: startMinute}, nil
 }
 
-// slot calculates the primary's Brussels-local slot for both processes.
-// Primary acts at slot+5s, standby at slot+75s. No missed-slot catch-up.
-func slot(now time.Time, role string) (time.Time, bool) {
+// windowMinute uses Brussels wall-clock minutes; the two-hour window may
+// cross midnight. The nonexistent spring DST hour is never dispatched.
+func windowMinute(now time.Time, startMinute int) (int, bool) {
 	t := now.In(brussels)
-	if t.Hour() != 3 && t.Hour() != 4 { return time.Time{}, false }
-	if role == "primary" {
-		if t.Minute()%5 != 2 || t.Second() < 5 { return time.Time{}, false }
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, brussels), true
+	elapsed := (t.Hour()*60 + t.Minute() - startMinute + 1440) % 1440
+	return elapsed, elapsed < 120
+}
+
+// Primary dispatches at start+2m05s and every five minutes thereafter;
+// standby checks the same slot 70 seconds later. Never replay old slots.
+func slot(now time.Time, role string, startMinute int) (time.Time, bool) {
+	minute, inside := windowMinute(now, startMinute)
+	if !inside { return time.Time{}, false }
+	t := now.In(brussels)
+	if role == "primary" && minute%5 == 2 && t.Second() >= 5 {
+		return t.Truncate(time.Minute), true
 	}
-	if role == "standby" {
-		if t.Minute()%5 != 3 || t.Second() < 15 { return time.Time{}, false }
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute()-1, 0, 0, brussels), true
+	if role == "standby" && minute%5 == 3 && t.Second() >= 15 {
+		return t.Truncate(time.Minute).Add(-time.Minute), true
 	}
 	return time.Time{}, false
 }
@@ -139,13 +173,14 @@ func (g *github) exists(ctx context.Context, t time.Time) (bool, error) {
 }
 
 // The sole write operation is workflow_dispatch on the fixed trusted target.
-func (g *github) dispatch(ctx context.Context, t time.Time) error {
+func (g *github) dispatch(ctx context.Context, t time.Time, startMinute int) error {
 	body, err := json.Marshal(map[string]any{
 		"ref": branch,
 		"inputs": map[string]string{
 			"dry_run": "false",
 			"scheduler_dispatch": "true",
 			"schedule_slot": slotID(t),
+			"schedule_start_time": startTimeText(startMinute),
 		},
 	})
 	if err != nil { return err }
@@ -211,7 +246,7 @@ func (s *scheduler) tick(ctx context.Context, now time.Time) {
 			}
 		}
 	}
-	t, ready := slot(now, s.cfg.role)
+	t, ready := slot(now, s.cfg.role, s.cfg.startMinute)
 	if !ready { return }
 	id := slotID(t)
 	if id == s.lastSlot { return }
@@ -231,11 +266,11 @@ func (s *scheduler) tick(ctx context.Context, now time.Time) {
 	}
 	clock := time.Now
 	if s.clock != nil { clock = s.clock }
-	if current := clock().In(brussels); current.Hour() < 3 || current.Hour() >= 5 {
+	if _, inside := windowMinute(clock(), s.cfg.startMinute); !inside {
 		s.log.Warn("dispatch skipped outside merge window", "slot", id)
 		return
 	}
-	if err := s.api.dispatch(ctx, t); err != nil {
+	if err := s.api.dispatch(ctx, t, s.cfg.startMinute); err != nil {
 		s.log.Error("dispatch failed", "slot", id, "role", s.cfg.role, "error", err)
 		return
 	}
@@ -267,7 +302,7 @@ func main() {
 		logger.Error("invalid scheduler configuration", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("scheduler started", "role", cfg.role, "timezone", "Europe/Brussels", "repository", repository)
+	logger.Info("scheduler started", "role", cfg.role, "timezone", "Europe/Brussels", "start_time", startTimeText(cfg.startMinute), "window_minutes", 120, "repository", repository)
 	if !cfg.smokeAt.IsZero() {
 		logger.Info("one-shot dry-run diagnostic configured", "at", cfg.smokeAt.Format(time.RFC3339), "role", cfg.role)
 	}

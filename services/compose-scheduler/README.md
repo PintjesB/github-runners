@@ -20,8 +20,8 @@ sidecars belongs in the `docker-compose` repository.
 
 | Role | Behavior |
 | --- | --- |
-| `primary` | Check at 03:02:05, 03:07:05 ... 04:57:05 Brussels |
-| `standby` | At primary slot +75 seconds, check GitHub; dispatch if absent |
+| `primary` | Start+2m05s and every five minutes for two hours (default 03:02:05–04:57:05 Brussels) |
+| `standby` | At primary slot +70 seconds, check GitHub; dispatch if absent |
 
 Both roles independently calculate the same RFC3339 slot ID. The
 primary checks GitHub before POST, including after container restarts.
@@ -38,7 +38,7 @@ check time, CI, PR identity, stale SHAs and changed-file conflicts.
 The scheduler never merges PRs or deploys stacks. On a failed GET it
 fails closed. After an ambiguous POST failure it does not retry the
 same slot blindly. The standby and subsequent slots provide recovery.
-No missed executions are replayed outside 03:00–04:59 Brussels.
+No missed executions are replayed outside the configured two-hour Brussels-local window. `SCHEDULER_START_TIME` uses strict 24-hour `HH:MM` and defaults to `03:00`. Both hosts must use the same start time; windows crossing midnight are supported. The variable defines a window start, not a one-off daily trigger.
 
 ## Deployment prerequisites
 
@@ -78,12 +78,14 @@ end-to-end dispatch, successful merging, and CI-gated Komodo execution.
 
 ## Container contract
 
-Set `SCHEDULER_ROLE=primary` at home and `SCHEDULER_ROLE=standby`
+Set `SCHEDULER_START_TIME=03:00` (or another Brussels-local HH:MM) on both hosts. Set `SCHEDULER_ROLE=primary` at home and `SCHEDULER_ROLE=standby`
 at the VPS. Each instance needs its **own** fine-grained PAT scoped to
 only `PintjesB/docker-compose` with repository `Actions: Read and write`.
 Mount the token only into its scheduler container as
 `/run/secrets/github_dispatch_token` (optionally use `GITHUB_TOKEN_FILE`
 to override the *file path*).
+
+**Important:** The `docker-compose` workflow and merger must agree on the start time. When overriding the default, set the GitHub repository Actions variable `COMPOSE_CI_SCHEDULER_START_TIME` to the identical value. The workflow refuses mismatched scheduler requests and the merger separately checks its local two-hour window. GitHub’s native cron is still fixed at 03:02–04:57 until changed or removed separately, but cannot merge outside the configured window.
 
 Do not share the PAT with either GitHub Actions runner container, or
 expose it via environment variables. Mount a writable `/tmp` tmpfs

@@ -35,7 +35,7 @@ func TestSlotsCETCESTAndWindow(t *testing.T) {
 		{"2026-07-17T04:57:05+02:00", "primary", "2026-07-17T04:57:00+02:00", true},
 	} {
 		t.Run(tc.when+"-"+tc.role,func(t *testing.T){
-			got,ok := slot(tm(tc.when),tc.role)
+			got,ok := slot(tm(tc.when),tc.role,180)
 			if ok!=tc.ready {t.Fatalf("ready=%t want %t",ok,tc.ready)}
 			if ok && slotID(got)!=tc.expected {t.Fatalf("slot=%s want %s",slotID(got),tc.expected)}
 		})
@@ -63,10 +63,11 @@ func TestFixedAPIAndSafeDispatchPayload(t *testing.T) {
 		if r.Method!=http.MethodPost {t.Errorf("unexpected method %s",r.Method)}
 		var data struct {Ref string `json:"ref"`;Inputs map[string]string `json:"inputs"`}
 		if err:=json.NewDecoder(r.Body).Decode(&data);err!=nil {t.Error(err)}
-		if data.Ref!="master" || len(data.Inputs)!=3 ||
+		if data.Ref!="master" || len(data.Inputs)!=4 ||
 			data.Inputs["dry_run"]!="false" ||
 			data.Inputs["scheduler_dispatch"]!="true" ||
-			data.Inputs["schedule_slot"]!=slotID(target) {
+			data.Inputs["schedule_slot"]!=slotID(target) ||
+			data.Inputs["schedule_start_time"]!="03:00" {
 			t.Errorf("unsafe dispatch body: %+v",data)
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -74,7 +75,7 @@ func TestFixedAPIAndSafeDispatchPayload(t *testing.T) {
 	defer closeServer()
 	exists,err:=g.exists(context.Background(),target)
 	if err!=nil||exists {t.Fatalf("exists=%t error=%v",exists,err)}
-	if err:=g.dispatch(context.Background(),target);err!=nil {t.Fatal(err)}
+	if err:=g.dispatch(context.Background(),target,180);err!=nil {t.Fatal(err)}
 	if len(calls)!=2 || !strings.Contains(calls[0],endpoint()+"/runs?") ||
 		!strings.Contains(calls[1],endpoint()+"/dispatches") {t.Errorf("calls=%v",calls)}
 	for _,call:=range calls {if strings.Contains(call,"test-token") {t.Fatal("token leaked in URL")}}
@@ -89,7 +90,7 @@ func TestStandbySuppressesDuplicate(t *testing.T) {
 	})
 	defer closeServer()
 	now:=tm("2026-11-17T03:03:15+01:00")
-	s:=&scheduler{cfg:config{role:"standby"},api:g,
+	s:=&scheduler{cfg:config{role:"standby",startMinute:180},api:g,
 		log:slog.New(slog.NewJSONHandler(&bytes.Buffer{},nil)),
 		clock:func()time.Time{return now}}
 	s.tick(context.Background(),now)
@@ -131,7 +132,7 @@ func TestConfigurationRequiresSecretAndRole(t *testing.T) {
 	if _,err:=readConfig();err==nil {t.Fatal("missing secret accepted")}
 	if err:=os.WriteFile(f,[]byte("temporary-token"),0600);err!=nil{t.Fatal(err)}
 	cfg,err:=readConfig()
-	if err!=nil || cfg.tokenFile!=f {t.Fatalf("cfg=%+v error=%v",cfg,err)}
+	if err!=nil || cfg.tokenFile!=f || cfg.startMinute!=180 {t.Fatalf("cfg=%+v error=%v",cfg,err)}
 }
 
 func TestStandbyDispatchesWhenPrimaryAbsent(t *testing.T) {
@@ -147,7 +148,7 @@ func TestStandbyDispatchesWhenPrimaryAbsent(t *testing.T) {
 	defer closeServer()
 	now := tm("2026-11-17T03:03:15+01:00")
 	s := &scheduler{
-		cfg: config{role: "standby"}, api: g,
+		cfg: config{role: "standby",startMinute:180}, api: g,
 		log: slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 		clock: func() time.Time { return now },
 	}
@@ -167,7 +168,7 @@ func TestOutsideWindowNeverContactsGitHub(t *testing.T) {
 	defer closeServer()
 	now := tm("2026-11-17T05:02:10+01:00")
 	s := &scheduler{
-		cfg: config{role: "primary"}, api: g,
+		cfg: config{role: "primary",startMinute:180}, api: g,
 		log: slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 		clock: func() time.Time { return now },
 	}
@@ -223,9 +224,49 @@ func TestSmokeOnePerProcess(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	defer closeServer()
-	s:=&scheduler{cfg:config{role:"primary",smokeAt:at},api:g,
+	s:=&scheduler{cfg:config{role:"primary",startMinute:180,smokeAt:at},api:g,
 		log:slog.New(slog.NewJSONHandler(&bytes.Buffer{},nil))}
 	s.tick(context.Background(),at)
 	s.tick(context.Background(),at.Add(5*time.Second))
 	if posts!=1 {t.Fatalf("expected exactly one smoke dispatch, got %d",posts)}
+}
+
+func TestStartTimeParsing(t *testing.T) {
+	for _,tc:=range []struct{raw string; want int}{
+		{"",180},{"03:00",180},{"00:00",0},{"23:59",1439},{"21:15",1275},{"05:07",307},
+	} {
+		got,err:=parseStartTime(tc.raw)
+		if err!=nil || got!=tc.want {t.Errorf("%q: got %d error %v; want %d",tc.raw,got,err,tc.want)}
+	}
+	for _,raw:=range []string{"3:00","03:0","24:00","01:60","bad"," 03:00","03:00 ","-1:00","03:99","+1:00","03:+1"} {
+		if _,err:=parseStartTime(raw);err==nil {t.Errorf("invalid start accepted: %q",raw)}
+	}
+}
+
+func TestCustomScheduleSlotsAcrossMidnight(t *testing.T) {
+	for _,tc:=range []struct{when,role string; start int; want string}{
+		{"2026-11-17T21:17:05+01:00","primary",1275,"2026-11-17T21:17:00+01:00"},
+		{"2026-11-17T21:18:15+01:00","standby",1275,"2026-11-17T21:17:00+01:00"},
+		{"2026-11-18T00:02:05+01:00","primary",1410,"2026-11-18T00:02:00+01:00"},
+		{"2026-11-18T00:03:15+01:00","standby",1410,"2026-11-18T00:02:00+01:00"},
+		{"2026-11-18T01:32:05+01:00","primary",1410,""},
+		{"2026-07-18T00:02:05+02:00","primary",1410,"2026-07-18T00:02:00+02:00"},
+	} {
+		got,ok:=slot(tm(tc.when),tc.role,tc.start)
+		if (tc.want=="")!=(!ok) || (ok && slotID(got)!=tc.want) {
+			t.Errorf("when=%s role=%s start=%d slot=%s ready=%t want=%s",tc.when,tc.role,tc.start,slotID(got),ok,tc.want)
+		}
+	}
+}
+
+func TestReadConfigStartTime(t *testing.T) {
+	file:=filepath.Join(t.TempDir(),"token")
+	if err:=os.WriteFile(file,[]byte("token"),0600);err!=nil {t.Fatal(err)}
+	t.Setenv("SCHEDULER_ROLE","primary")
+	t.Setenv("GITHUB_TOKEN_FILE",file)
+	t.Setenv("SCHEDULER_START_TIME","21:15")
+	cfg,err:=readConfig()
+	if err!=nil || cfg.startMinute!=1275 {t.Fatalf("cfg=%+v error=%v",cfg,err)}
+	t.Setenv("SCHEDULER_START_TIME","25:00")
+	if _,err:=readConfig();err==nil {t.Fatal("invalid start time accepted")}
 }
