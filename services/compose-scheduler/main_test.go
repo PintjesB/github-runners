@@ -176,3 +176,56 @@ func TestOutsideWindowNeverContactsGitHub(t *testing.T) {
 		t.Fatal("out-of-window scheduler contacted GitHub")
 	}
 }
+
+func TestSmokeOnlyPrimaryWithinOneShotWindow(t *testing.T) {
+	at := tm("2026-11-17T14:49:00+01:00")
+	for _, tc := range []struct{ offset time.Duration; role string; want bool }{
+		{-time.Second, "primary", false},
+		{0, "primary", true},
+		{5*time.Second, "primary", true},
+		{44*time.Second, "primary", true},
+		{45*time.Second, "primary", false},
+		{5*time.Second, "standby", false},
+		{5*time.Second, "disabled", false},
+	} {
+		got := smokeDue(at.Add(tc.offset), at, tc.role)
+		if got != tc.want { t.Errorf("offset=%s role=%s: %v, want %v",tc.offset,tc.role,got,tc.want) }
+	}
+}
+
+func TestSmokeDispatchCannotMerge(t *testing.T) {
+	at := tm("2026-11-17T14:49:00+01:00")
+	var calls int
+	g,closeServer:=githubForTest(t,func(w http.ResponseWriter,r *http.Request) {
+		calls++
+		if r.Method != http.MethodPost || r.URL.Path != endpoint()+"/dispatches" {
+			t.Errorf("unexpected request %s %s",r.Method,r.URL.Path)
+		}
+		var data struct { Ref string `json:"ref"`; Inputs map[string]string `json:"inputs"` }
+		if err:=json.NewDecoder(r.Body).Decode(&data);err!=nil {t.Error(err)}
+		if data.Ref!="master" || len(data.Inputs)!=3 ||
+			data.Inputs["dry_run"]!="true" || data.Inputs["scheduler_dispatch"]!="false" ||
+			data.Inputs["schedule_slot"]!="smoke-"+at.Format(time.RFC3339) {
+			t.Errorf("unsafe smoke dispatch: %+v",data)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	defer closeServer()
+	if err:=g.dispatchSmoke(context.Background(),at);err!=nil {t.Fatal(err)}
+	if calls!=1 {t.Fatalf("want one dispatch, got %d",calls)}
+}
+
+func TestSmokeOnePerProcess(t *testing.T) {
+	at:=tm("2026-11-17T14:49:00+01:00")
+	posts:=0
+	g,closeServer:=githubForTest(t,func(w http.ResponseWriter,r *http.Request){
+		if r.Method==http.MethodPost {posts++}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	defer closeServer()
+	s:=&scheduler{cfg:config{role:"primary",smokeAt:at},api:g,
+		log:slog.New(slog.NewJSONHandler(&bytes.Buffer{},nil))}
+	s.tick(context.Background(),at)
+	s.tick(context.Background(),at.Add(5*time.Second))
+	if posts!=1 {t.Fatalf("expected exactly one smoke dispatch, got %d",posts)}
+}
