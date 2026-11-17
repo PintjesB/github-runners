@@ -238,7 +238,7 @@ func TestStartTimeParsing(t *testing.T) {
 		got,err:=parseStartTime(tc.raw)
 		if err!=nil || got!=tc.want {t.Errorf("%q: got %d error %v; want %d",tc.raw,got,err,tc.want)}
 	}
-	for _,raw:=range []string{"3:00","03:0","24:00","01:60","bad"," 03:00","03:00 ","-1:00","03:99"} {
+	for _,raw:=range []string{"3:00","03:0","24:00","01:60","bad"," 03:00","03:00 ","-1:00","03:99","+1:00","03:+1"} {
 		if _,err:=parseStartTime(raw);err==nil {t.Errorf("invalid start accepted: %q",raw)}
 	}
 }
