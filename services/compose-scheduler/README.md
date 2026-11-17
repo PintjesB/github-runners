@@ -92,6 +92,8 @@ to support the built-in heartbeat healthcheck. Set `read_only: true`,
 No ports, privileged mode, external volumes or Docker socket are needed.
 Confirm secret-file read permissions for UID 65532 in each Compose stack.
 
+Before enabling the overnight scheduler, run `docker exec <container> /scheduler --probe` to verify credential access and the GitHub API. The probe performs only a read-only list operation and cannot dispatch or merge anything.
+
 The token is re-read from disk per API request, so rotating the file
 does not require an image rebuild. On startup the token file must exist.
 
