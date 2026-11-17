@@ -1,0 +1,93 @@
+name: compose-scheduler-image
+
+on:
+  pull_request:
+    paths:
+      - 'services/compose-scheduler/**'
+      - '.github/workflows/compose-scheduler-image.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/compose-scheduler/**'
+      - '.github/workflows/compose-scheduler-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compose-scheduler-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Test and build linux/amd64 + linux/arm64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Test using exact Go builder version
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --mount "type=bind,source=${PWD}/services/compose-scheduler,target=/src,readonly" \
+            --workdir /src golang:1.26.11-alpine3.24 \
+            sh -c 'go test ./... && go vet ./...'
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Verify both image architectures build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ./services/compose-scheduler
+          platforms: linux/amd64,linux/arm64
+          push: false
+          provenance: false
+          sbom: false
+
+  publish:
+    name: Publish pinned multiarch image
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Publish manifest, provenance and SBOM
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ./services/compose-scheduler
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          sbom: true
+          tags: |
+            ghcr.io/pintjesb/compose-scheduler:sha-${{ github.sha }}
+            ghcr.io/pintjesb/compose-scheduler:latest
+      - name: Verify published platform set
+        env:
+          IMAGE: ghcr.io/pintjesb/compose-scheduler:sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect --raw "$IMAGE" | python3 -c '
+          import json, sys
+          manifest = json.load(sys.stdin)
+          platforms = {(m.get("platform", {}).get("os"), m.get("platform", {}).get("architecture"))
+                       for m in manifest.get("manifests", [])}
+          required = {("linux", "amd64"), ("linux", "arm64")}
+          if not required.issubset(platforms):
+              sys.exit(f"missing platforms: {sorted(required-platforms)}")
+          print("Verified", sorted(required))
+          '
