@@ -205,8 +205,9 @@ func main() {
 		if !healthy() { os.Exit(1) }
 		return
 	}
-	if len(os.Args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: scheduler [--healthcheck]")
+	probe := len(os.Args) == 2 && os.Args[1] == "--probe"
+	if !probe && len(os.Args) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: scheduler [--healthcheck|--probe]")
 		os.Exit(2)
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -218,6 +219,17 @@ func main() {
 	logger.Info("scheduler started", "role", cfg.role, "timezone", "Europe/Brussels", "repository", repository)
 	client := &http.Client{Timeout: 20*time.Second}
 	s := &scheduler{cfg: cfg, api: &github{http: client, root: cfg.apiURL, tokenFile: cfg.tokenFile}, log: logger}
+	if probe {
+		// Read-only credential check; safe to run at any hour, no merges.
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if _, err := s.api.exists(ctx, time.Now()); err != nil {
+			logger.Error("GitHub API probe failed", "error", err)
+			os.Exit(1)
+		}
+		logger.Info("GitHub API probe successful; no workflow dispatch sent")
+		return
+	}
 	if err := writeHeartbeat(); err != nil {
 		logger.Error("heartbeat write failed", "error", err)
 		os.Exit(1)
