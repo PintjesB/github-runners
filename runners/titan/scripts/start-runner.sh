@@ -112,7 +112,7 @@ RUNNER_BROWSER_SEED="${RUNNER_BROWSER_SEED:-/home/runner/.cache/ms-playwright}"
 RUNNER_ROOT="${RUNNER_ROOT:-/opt/actions-runner}"
 PIP_CACHE_DIR="${PIP_CACHE_DIR:-/var/lib/titan-runner/cache/pip}"
 npm_config_cache="${npm_config_cache:-/var/lib/titan-runner/cache/npm}"
-export PIP_CACHE_DIR npm_config_cache
+export PIP_CACHE_DIR npm_config_cache RUNNER_WORK_DIR RUNNER_RUNTIME_DIR
 
 # The Compose service is the only long-lived container. Registration is
 # an internal startup phase, and these traps ensure the short-lived
@@ -173,6 +173,11 @@ install -d -m 0750 -o runner -g runner \
 # reads ``.runner`` and ``.credentials*`` from ``$HOME`` at startup,
 # so setting ``HOME=$RUNNER_RUNTIME_DIR`` makes the overlaid
 # credentials resolve naturally.
+log "cleaning abandoned job workspace and caches before runtime copy"
+if ! timeout --signal=TERM --kill-after=10s 300s gosu runner bash /opt/runner-hooks/runner-job-cleanup.sh startup; then
+    log "WARNING: startup cleanup incomplete; the next pre-job hook will retry and gate jobs"
+fi
+
 log "materialising runtime tree at $RUNNER_RUNTIME_DIR"
 rm -rf "$RUNNER_RUNTIME_DIR"
 mkdir -p "$RUNNER_RUNTIME_DIR"
