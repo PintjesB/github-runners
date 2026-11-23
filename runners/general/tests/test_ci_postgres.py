@@ -66,6 +66,12 @@ class PostgresRunnerTests(unittest.TestCase):
         self.assertIn('select 1', PROBE)
         self.assertIn("gosu runner /usr/local/bin/runner-ci-postgres stop", PROBE)
         self.assertIn("PostgreSQL PGDATA survived cleanup", PROBE)
+        # Live native probes must exercise the actual baked hooks with a
+        # running server, not merely grep their source for stop invocations.
+        self.assertIn("gosu runner /opt/runner-hooks/job-completed.sh", PROBE)
+        self.assertIn("completed hook left PostgreSQL PGDATA", PROBE)
+        self.assertIn("gosu runner /opt/runner-hooks/job-started.sh", PROBE)
+        self.assertIn("started hook left PostgreSQL PGDATA", PROBE)
 
 
 if __name__ == "__main__":

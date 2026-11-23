@@ -57,7 +57,9 @@ RUN groupadd --system --gid 1001 runner \
  && useradd --system --uid 1001 --gid 1001 \
       --home-dir /home/runner --shell /bin/bash \
       --comment "Oportunist GitHub Actions runner" runner \
- && mkdir -p /home/runner /var/lib/oportunist-runner/{state,runtime,work} \
+ && mkdir -p /home/runner \
+      /var/lib/oportunist-runner/state /var/lib/oportunist-runner/runtime \
+      /var/lib/oportunist-runner/work \
  && chown -R runner:runner /home/runner /var/lib/oportunist-runner
 
 COPY --chown=root:root scripts/titan-evidence /usr/local/bin/titan-evidence

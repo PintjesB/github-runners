@@ -58,6 +58,34 @@ done
 gosu runner /usr/local/bin/runner-ci-postgres stop
 gosu runner /usr/local/bin/runner-ci-postgres stop
 [ ! -e "$pg_work/_ci_postgres" ] || { echo "PostgreSQL PGDATA survived cleanup" >&2; exit 1; }
+
+# Exercise the actual baked GitHub hooks, not just the helper directly. Both
+# must remove PGDATA without deleting the persistent listener registration.
+install -d -m 0750 -o runner -g runner \
+    /var/lib/general-runner/cache/pip /var/lib/general-runner/cache/npm \
+    "$pg_work/_tool"
+GITHUB_ENV="$pg_env" gosu runner /usr/local/bin/runner-ci-postgres start
+RUNNER_WORK_DIR="$pg_work" RUNNER_CLEANUP_MIN_FREE_GB=0 \
+    RUNNER_CLEANUP_MIN_FREE_INODES_PCT=0 \
+    gosu runner /opt/runner-hooks/job-completed.sh
+if gosu runner /usr/local/bin/runner-ci-postgres status; then
+    echo "PostgreSQL still running after completed hook" >&2
+    exit 1
+fi
+[ ! -e "$pg_work/_ci_postgres" ] || { echo "completed hook left PostgreSQL PGDATA" >&2; exit 1; }
+
+# A killed job may miss its completion hook. The next started hook must
+# independently stop the orphaned database before accepting a new job.
+GITHUB_ENV="$pg_env" gosu runner /usr/local/bin/runner-ci-postgres start
+RUNNER_WORK_DIR="$pg_work" RUNNER_CLEANUP_MIN_FREE_GB=0 \
+    RUNNER_CLEANUP_MIN_FREE_INODES_PCT=0 \
+    gosu runner /opt/runner-hooks/job-started.sh
+if gosu runner /usr/local/bin/runner-ci-postgres status; then
+    echo "PostgreSQL still running after started hook" >&2
+    exit 1
+fi
+[ ! -e "$pg_work/_ci_postgres" ] || { echo "started hook left PostgreSQL PGDATA" >&2; exit 1; }
+
 rm -f "$pg_env"
 trap - EXIT
 
