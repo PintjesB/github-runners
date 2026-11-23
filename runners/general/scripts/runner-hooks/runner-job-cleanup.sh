@@ -28,7 +28,8 @@
 # _PipelineMapping, the runner binaries, .runner/.credentials, the state
 # volume, HOME, Docker objects, or anything outside the paths above.
 #
-# It must never fail a job: every error is logged and the script exits 0.
+# The started hook fails a job when cleanup cannot be completed safely;
+# completion and startup stay best effort. No host Docker object is removed.
 set +e
 set -u
 
@@ -39,7 +40,7 @@ log() { printf '[runner-cleanup:%s] %s\n' "$phase" "$*"; }
 
 dry_run="${RUNNER_CLEANUP_DRY_RUN:-0}"
 diag_days="${RUNNER_CLEANUP_DIAG_DAYS:-3}"
-tmp_minutes="${RUNNER_CLEANUP_TMP_MINUTES:-360}"
+tmp_minutes="${RUNNER_CLEANUP_TMP_MINUTES:-15}"
 # Disposable package caches: clear after each job, regardless of size.
 cache_max_mb="${RUNNER_CLEANUP_CACHE_MAX_MB:-0}"
 # Avoid retaining many gigabytes of downloaded setup-* tool versions.
@@ -116,6 +117,7 @@ remove_path() {
     local p="$1"
     if [ ! -L "$p" ] && { mountpoint -q -- "$p" 2>/dev/null || { [ -d "$p" ] && has_nested_mount "$p"; }; }; then
         log "skip mounted path: $p"
+        [ "$phase" = started ] && failures=$((failures + 1))
         return 0
     fi
     removed=$((removed + 1))
@@ -160,6 +162,7 @@ clean_workspaces() {
                 # even when it shares the work volume's underlying device.
                 if mountpoint -q -- "$sub" 2>/dev/null || has_nested_mount "$sub"; then
                     log "skip mounted workspace: $sub"
+                    [ "$phase" = started ] && failures=$((failures + 1))
                     continue
                 fi
                 # <repo>/<repo> is the job workspace: keep the directory.
@@ -187,6 +190,29 @@ clean_diag() {
     done < <(find "$d" -xdev -type f \( -name 'Runner_*.log' -o -name 'Worker_*.log' -o -path "$d/pages/*" -o -path "$d/blocks/*" \) -mtime +"$diag_days" -print0 2>/dev/null)
 }
 
+# An action may use $HOME/.cache or $HOME/.npm rather than the configured
+# package-cache volume. These stores are disposable; never touch .config,
+# .credentials, .runner, .ssh, .codex or any other runtime state.
+clean_home_caches() {
+    local d
+    case "$runtime_dir" in
+        /var/lib/general-runner/runtime) ;;
+        /tmp/*) under_tmp "$runtime_dir" || return 0 ;;
+        *) log "runtime cache: unsafe runtime root $runtime_dir, skipped"; return 0 ;;
+    esac
+    for d in "$runtime_dir/.cache" "$runtime_dir/.npm" "$runtime_dir/.local/share/pnpm/store"; do
+        if [ -d "$d" ] || [ -L "$d" ]; then
+            if safe_dir "$d"; then
+                log "clearing disposable runtime cache $d"
+                clear_contents "$d"
+            else
+                log "WARNING: unsafe runtime cache $d, skipped"
+                [ "$phase" = started ] && failures=$((failures + 1))
+            fi
+        fi
+    done
+}
+
 clean_tmp() {
     local d="$1"
     case "$d" in
@@ -209,8 +235,18 @@ cap_dir() {
         log "$label: unsafe location $d, skipped"
         return 0
     fi
-    safe_dir "$d" || { log "$label: $d missing or not ours, skipped"; return 0; }
-    is_uint "$max" || { log "$label: invalid cap '$max', skipped"; return 0; }
+    safe_dir "$d" || {
+        log "WARNING: $label: $d missing or not ours, skipped"
+        if [ "$phase" = started ] && { [ "$label" = "pip cache" ] || [ "$label" = "npm cache" ]; }; then
+            failures=$((failures + 1))
+        fi
+        return 0
+    }
+    is_uint "$max" || {
+        log "WARNING: $label: invalid cap '$max', skipped"
+        [ "$phase" = started ] && failures=$((failures + 1))
+        return 0
+    }
     size="$(size_mb "$d")"
     if [ "${size:-0}" -gt "$max" ]; then
         log "$label: ${size} MB > cap ${max} MB, emptying $d"
@@ -287,6 +323,7 @@ main() {
     clean_workspaces "$root"
     clean_diag "$diag_dir"
     clean_tmp "$tmp_dir"
+    clean_home_caches
     # Always target the known image cache directories. A workflow-provided
     # cache env override cannot hide stale data in the persistent volume.
     local pip_dir="${PIP_CACHE_DIR:-/var/lib/general-runner/cache/pip}"
