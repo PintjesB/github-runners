@@ -13,6 +13,12 @@ esac
 for bin in bash curl git jq gh docker shellcheck node npm python3 psql; do
     command -v "$bin" >/dev/null || { echo "missing $bin" >&2; exit 1; }
 done
+# Verify lifecycle hook configuration and files in the built image.
+[ "${ACTIONS_RUNNER_HOOK_JOB_STARTED:-}" = /opt/runner-hooks/job-started.sh ]
+[ "${ACTIONS_RUNNER_HOOK_JOB_COMPLETED:-}" = /opt/runner-hooks/job-completed.sh ]
+for hook in "$ACTIONS_RUNNER_HOOK_JOB_STARTED" "$ACTIONS_RUNNER_HOOK_JOB_COMPLETED" /opt/runner-hooks/runner-job-cleanup.sh; do
+    [ -r "$hook" ] && bash -n "$hook"
+done
 docker compose version
 docker buildx version
 # Ubuntu 24.04 provides PostgreSQL client 16 on both amd64 and arm64.
