@@ -12,7 +12,7 @@ RUNNER_WORK_DIR="${RUNNER_WORK_DIR:-/var/lib/general-runner/work}"
 RUNNER_ROOT="${RUNNER_ROOT:-/opt/actions-runner}"
 PIP_CACHE_DIR="${PIP_CACHE_DIR:-/var/lib/general-runner/cache/pip}"
 npm_config_cache="${npm_config_cache:-/var/lib/general-runner/cache/npm}"
-export PIP_CACHE_DIR npm_config_cache
+export PIP_CACHE_DIR npm_config_cache RUNNER_WORK_DIR RUNNER_RUNTIME_DIR
 DOCKER_SOCKET="${DOCKER_SOCKET:-/var/run/docker.sock}"
 
 trap 'unset RUNNER_TOKEN || true' EXIT HUP INT TERM
@@ -49,6 +49,11 @@ fi
 chown -R runner:runner "$RUNNER_RUNTIME_DIR"
 chmod 0640 "$RUNNER_RUNTIME_DIR/.runner"
 chmod 0600 "$RUNNER_RUNTIME_DIR"/.credentials* 2>/dev/null || true
+
+# Clear stale job-owned data on container restart even when no new job arrives.
+# Registration and credentials are in RUNNER_STATE_DIR, outside these targets.
+log "cleaning disposable job data before listener startup"
+gosu runner bash /opt/runner-hooks/runner-job-cleanup.sh startup || true
 
 log "launching persistent listener"
 exec env HOME="$RUNNER_RUNTIME_DIR" \
