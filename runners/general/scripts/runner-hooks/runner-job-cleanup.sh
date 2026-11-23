@@ -33,15 +33,19 @@ set +e
 set -u
 
 phase="${1:-completed}"
-case "$phase" in started|completed) ;; *) phase=completed ;; esac
+case "$phase" in started|completed|startup) ;; *) phase=completed ;; esac
 
 log() { printf '[runner-cleanup:%s] %s\n' "$phase" "$*"; }
 
 dry_run="${RUNNER_CLEANUP_DRY_RUN:-0}"
 diag_days="${RUNNER_CLEANUP_DIAG_DAYS:-3}"
 tmp_minutes="${RUNNER_CLEANUP_TMP_MINUTES:-360}"
-cache_max_mb="${RUNNER_CLEANUP_CACHE_MAX_MB:-2048}"
-toolcache_max_mb="${RUNNER_CLEANUP_TOOLCACHE_MAX_MB:-3072}"
+# Disposable package caches: clear after each job, regardless of size.
+cache_max_mb="${RUNNER_CLEANUP_CACHE_MAX_MB:-0}"
+# Avoid retaining many gigabytes of downloaded setup-* tool versions.
+toolcache_max_mb="${RUNNER_CLEANUP_TOOLCACHE_MAX_MB:-1024}"
+min_free_gb="${RUNNER_CLEANUP_MIN_FREE_GB:-15}"
+min_free_inodes_pct="${RUNNER_CLEANUP_MIN_FREE_INODES_PCT:-5}"
 tmp_dir="${RUNNER_CLEANUP_TMP_DIR:-/tmp}"
 runtime_dir="${RUNNER_RUNTIME_DIR:-/var/lib/general-runner/runtime}"
 diag_dir="${RUNNER_CLEANUP_DIAG_DIR:-$runtime_dir/_diag}"
@@ -216,24 +220,62 @@ cap_dir() {
     fi
 }
 
+# Before a new job starts, reclaim what we own and refuse to run if the
+# shared Docker root filesystem is too full. GitHub marks this job failed,
+# but the persistent runner listener and registration remain unchanged.
+# A hook is not an in-job disk quota; host-side monitoring is still needed.
+prejob_storage_gate() {
+    local root="$1" free_kb inode_total inode_free inode_free_pct
+    is_uint "$min_free_gb" && [ "$min_free_gb" -le 1024 ] || {
+        log "ERROR: invalid RUNNER_CLEANUP_MIN_FREE_GB"; return 75;
+    }
+    is_uint "$min_free_inodes_pct" && [ "$min_free_inodes_pct" -le 100 ] || {
+        log "ERROR: invalid RUNNER_CLEANUP_MIN_FREE_INODES_PCT"; return 75;
+    }
+    free_kb="$(df -Pk -- "$root" 2>/dev/null | awk 'NR==2 {print $4}')"
+    is_uint "$free_kb" || {
+        log "ERROR: cannot read free disk space for $root"; return 75;
+    }
+    log "pre-job storage: $((free_kb / 1024)) MB free (minimum ${min_free_gb} GiB)"
+    if [ "$free_kb" -lt "$((min_free_gb * 1024 * 1024))" ]; then
+        log "ERROR: insufficient disk space; refusing to start this job"; return 75;
+    fi
+    read -r inode_total inode_free < <(df -Pi -- "$root" 2>/dev/null | awk 'NR==2 {print $2, $4}')
+    is_uint "${inode_total:-}" && is_uint "${inode_free:-}" || {
+        log "ERROR: cannot read free inodes"; return 75;
+    }
+    if [ "$inode_total" -gt 0 ]; then
+        inode_free_pct="$((inode_free * 100 / inode_total))"
+        log "pre-job inodes: ${inode_free_pct}% free (minimum ${min_free_inodes_pct}%)"
+        if [ "$inode_free_pct" -lt "$min_free_inodes_pct" ]; then
+            log "ERROR: insufficient free inodes; refusing to start this job"; return 75;
+        fi
+    fi
+    return 0
+}
+
 main() {
     if [ "${RUNNER_CLEANUP_DISABLE:-0}" = 1 ]; then
         log "disabled by RUNNER_CLEANUP_DISABLE=1"
         return 0
     fi
 
-    local ws="${RUNNER_WORKSPACE:-}" root
-    case "$ws" in /*) ;; *) log "RUNNER_WORKSPACE not set or not absolute, nothing cleaned"; return 0 ;; esac
-    root="${ws%/*}"
-    # The work root must be a real directory of ours that the runner has
-    # set up (it always creates _temp there). Anything else: do nothing.
-    if ! safe_dir "$root" || ! is_work_root "$root" || [ ! -d "$root/_temp" ]; then
-        log "work root '$root' does not look like a runner work directory, nothing cleaned"
+    # RUNNER_WORK_DIR is exported by the image entrypoint, so cleanup works
+    # on boot and in hooks even if RUNNER_WORKSPACE is absent in a job hook.
+    local ws="${RUNNER_WORKSPACE:-}" root="${RUNNER_WORK_DIR:-}"
+    if [ -z "$root" ]; then
+        case "$ws" in /*) root="${ws%/*}" ;; esac
+    fi
+    if ! safe_dir "$root" || ! is_work_root "$root"; then
+        log "ERROR: unsafe or missing work root '$root'"
+        [ "$phase" = started ] && return 75
         return 0
     fi
     if [ -n "${GITHUB_WORKSPACE:-}" ]; then
         case "$GITHUB_WORKSPACE" in "$root"/*) ;; *)
-            log "GITHUB_WORKSPACE is outside $root, nothing cleaned"; return 0 ;;
+            log "ERROR: GITHUB_WORKSPACE is outside $root"
+            [ "$phase" = started ] && return 75
+            return 0 ;;
         esac
     fi
 
@@ -245,8 +287,14 @@ main() {
     clean_workspaces "$root"
     clean_diag "$diag_dir"
     clean_tmp "$tmp_dir"
-    cap_dir "pip cache" "${PIP_CACHE_DIR:-}" "$cache_max_mb"
-    cap_dir "npm cache" "${npm_config_cache:-${NPM_CONFIG_CACHE:-}}" "$cache_max_mb"
+    # Always target the known image cache directories. A workflow-provided
+    # cache env override cannot hide stale data in the persistent volume.
+    local pip_dir="${PIP_CACHE_DIR:-/var/lib/general-runner/cache/pip}"
+    local npm_dir="${npm_config_cache:-${NPM_CONFIG_CACHE:-/var/lib/general-runner/cache/npm}}"
+    is_cache_dir "pip cache" "$pip_dir" || pip_dir=/var/lib/general-runner/cache/pip
+    is_cache_dir "npm cache" "$npm_dir" || npm_dir=/var/lib/general-runner/cache/npm
+    cap_dir "pip cache" "$pip_dir" "$cache_max_mb"
+    cap_dir "npm cache" "$npm_dir" "$cache_max_mb"
     tool="${RUNNER_TOOL_CACHE:-$root/_tool}"
     case "$tool" in "$root/_tool") cap_dir "tool cache" "$tool" "$toolcache_max_mb" ;;
         *) log "tool cache $tool is outside the work root, skipped" ;; esac
@@ -258,8 +306,15 @@ main() {
     else
         log "done: ${removed} path(s) $( [ "$dry_run" = 1 ] && printf 'would be ')removed, ${failures} not removable"
     fi
+    if [ "$phase" = started ]; then
+        if [ "$failures" -gt 0 ]; then
+            log "ERROR: cleanup left ${failures} unremovable paths; refusing new job"
+            return 75
+        fi
+        prejob_storage_gate "$root" || return 75
+    fi
     return 0
 }
 
-main || true
-exit 0
+main
+exit $?
