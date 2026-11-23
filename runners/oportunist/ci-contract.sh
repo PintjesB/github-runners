@@ -11,8 +11,7 @@ docker compose --env-file .env.example config >/dev/null
 docker compose --env-file .env.example --profile ci-light config --format json \
   | python3 -c 'import json,sys; light=json.load(sys.stdin)["services"]["runner-light"]; assert not any(v.get("type") == "bind" for v in light.get("volumes", [])); assert "docker info" not in str(light["healthcheck"])'
 python3 ../titan/tests/test_dependency_cache.py
-
-python3 ../titan/tests/test_dependency_cache.py
+python3 -m unittest discover -s tests -p test_runner_job_cleanup.py -v
 
 ! grep -q '@openai/codex' Dockerfile
 grep -q 'docker-compose-v2' Dockerfile
