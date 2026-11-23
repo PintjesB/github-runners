@@ -202,11 +202,14 @@ clean_home_caches() {
     esac
     for d in "$runtime_dir/.cache" "$runtime_dir/.npm" "$runtime_dir/.local/share/pnpm/store"; do
         if [ -d "$d" ] || [ -L "$d" ]; then
-            if safe_dir "$d"; then
+            # Reject symlinks anywhere in the path and mounted directories.
+            # A job must not redirect cache cleanup into protected state.
+            if safe_dir "$d" && [ "$(realpath -e -- "$d" 2>/dev/null)" = "$d" ] &&
+               ! mountpoint -q -- "$d" 2>/dev/null && ! has_nested_mount "$d"; then
                 log "clearing disposable runtime cache $d"
                 clear_contents "$d"
             else
-                log "WARNING: unsafe runtime cache $d, skipped"
+                log "WARNING: unsafe or mounted runtime cache $d, skipped"
                 [ "$phase" = started ] && failures=$((failures + 1))
             fi
         fi
