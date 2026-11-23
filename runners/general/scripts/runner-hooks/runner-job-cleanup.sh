@@ -257,11 +257,17 @@ cap_dir() {
         [ "$phase" = started ] && failures=$((failures + 1))
         return 0
     fi
-    size="${raw_size%%
-        log "$label: ${size} MB > cap ${max} MB, emptying $d"
+    size="$(printf '%s\n' "$raw_size" | awk '{print $1}')"
+    if ! is_uint "$size"; then
+        log "WARNING: $label: invalid size for $d, skipped"
+        [ "$phase" = started ] && failures=$((failures + 1))
+        return 0
+    fi
+    if [ "$size" -gt "$max" ]; then
+        log "$label: $size MB > cap $max MB, emptying $d"
         clear_contents "$d"
     else
-        log "$label: ${size:-0} MB (cap ${max} MB), kept"
+        log "$label: $size MB (cap $max MB), kept"
     fi
 }
 
