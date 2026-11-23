@@ -282,6 +282,17 @@ class JobCleanupTests(unittest.TestCase):
             self.assertIn("timeout --signal=TERM --kill-after=10s 300s", script)
         self.assertIn("exit 0", completed)
 
+    def test_started_hook_blocks_symlinked_workspace_parent(self):
+        link = self.work / "linked-repo"
+        link.symlink_to(self.outside.parent, target_is_directory=True)
+        result = subprocess.run(
+            [*SHELL, str(HOOKS / "job-started.sh")],
+            env=self.env, capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("symlinked workspace parent", result.stdout)
+        self.assertTrue(link.is_symlink())
+        self.assert_preserved()
+
     def test_dockerfile_contract(self):
         dockerfile = (PROFILE / "Dockerfile").read_text()
         self.assertIn("COPY --chown=root:root --chmod=0755 scripts/runner-hooks/", dockerfile)
