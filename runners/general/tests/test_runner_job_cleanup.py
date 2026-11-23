@@ -214,6 +214,53 @@ class JobCleanupTests(unittest.TestCase):
         self.assertTrue(file.exists())
         self.assert_preserved()
 
+    def test_runtime_home_caches_are_cleared_without_touching_credentials(self):
+        paths = [
+            put(self.runtime / ".cache" / "uv" / "package"),
+            put(self.runtime / ".npm" / "_cacache" / "content"),
+            put(self.runtime / ".local" / "share" / "pnpm" / "store" / "package"),
+        ]
+        self.run_hook()
+        for path in paths:
+            self.assertFalse(path.exists(), str(path))
+        self.assert_preserved()
+
+    def test_runtime_cache_symlink_parent_cannot_escape(self):
+        other = put(self.base / "other" / "share" / "pnpm" / "store" / "secret")
+        (self.runtime / ".local").symlink_to(other.parents[3], target_is_directory=True)
+        log = self.run_hook()
+        self.assertIn("unsafe or mounted runtime cache", log)
+        self.assertTrue(other.exists())
+        self.assert_preserved()
+
+    def test_started_hook_rejects_mounted_workspace_without_wiping_mount(self):
+        nested = self.workspace / "mount" / "data"
+        preserved = put(nested / "important")
+        cmd_dir = self.base / "bin"
+        script = put(cmd_dir / "findmnt",
+                     "#!/usr/bin/env bash\n"
+                     + "printf '%s\\n' " + repr(str(nested)) + "\n")
+        script.chmod(0o755)
+        env = dict(self.env, PATH=str(cmd_dir) + ":" + os.environ["PATH"])
+        result = subprocess.run(
+            [*SHELL, str(HOOKS / "job-started.sh")],
+            env=env, capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("skip mounted workspace", result.stdout)
+        self.assertIn("refusing new job", result.stdout)
+        self.assertTrue(preserved.exists())
+        self.assert_preserved()
+
+    def test_started_hook_rejects_unusable_package_cache(self):
+        (self.cache / "npm").rmdir()
+        result = subprocess.run(
+            [*SHELL, str(HOOKS / "job-started.sh")],
+            env=self.env, capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing or not ours", result.stdout)
+        self.assertIn("refusing new job", result.stdout)
+        self.assert_preserved()
+
     def test_dockerfile_contract(self):
         dockerfile = (PROFILE / "Dockerfile").read_text()
         self.assertIn("COPY --chown=root:root --chmod=0755 scripts/runner-hooks/", dockerfile)
