@@ -278,7 +278,9 @@ RUN chmod 0755 /usr/local/bin/register \
                 /usr/local/bin/probe \
                 /usr/local/bin/upstream-version
 
-# Install only the fail-fast pre-job capability hook.
+# Preserve the existing fail-fast Docker/Playwright capability pre-job hook.
+# Workspace/cache cleanup runs in that hook and at job completion. No daemon-wide
+# Docker prune or deletion of child Compose projects is permitted.
 # Playwright owns its disposable Compose project's cleanup via its
 # own EXIT trap (docker compose down -v). A generic runner post-job
 # hook cannot safely infer job ownership from a shared Docker daemon
@@ -286,6 +288,8 @@ RUN chmod 0755 /usr/local/bin/register \
 RUN install -d -m 0755 /opt/actions-runner/.hooks
 COPY scripts/pre-job.sh /opt/actions-runner/.hooks/PreJob.sh
 RUN chmod 0755 /opt/actions-runner/.hooks/PreJob.sh
+COPY --chown=root:root --chmod=0755 scripts/runner-hooks/ /opt/runner-hooks/
+ENV ACTIONS_RUNNER_HOOK_JOB_COMPLETED=/opt/runner-hooks/job-completed.sh
 
 # Document the expected labels so operators can spot misconfigured
 # deployments at a glance. The labels are passed at registration
