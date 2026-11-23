@@ -134,6 +134,44 @@ class JobCleanupTests(unittest.TestCase):
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_untrusted_cache_locations_cannot_remove_registration_or_actions(self):
+        # A workflow may set cache variables; none can redirect cleanup
+        # to runner state, credentials or the Actions cache.
+        for target in (self.runtime, self.work / "_actions", self.work / "_temp"):
+            protected = put(target / "protected", "do-not-delete")
+            self.run_hook(PIP_CACHE_DIR=str(target),
+                          npm_config_cache=str(target),
+                          RUNNER_TOOL_CACHE=str(target),
+                          RUNNER_CLEANUP_TOOLCACHE_MAX_MB="0",
+                          RUNNER_CLEANUP_CACHE_MAX_MB="0")
+            self.assertTrue(protected.exists(), str(target))
+        self.assert_preserved()
+
+    def test_untrusted_temp_and_diag_cannot_target_runtime(self):
+        protected = put(self.runtime / "Runner_sensitive.log", "preserve")
+        os.utime(protected, (time.time() - 86400 * 12,) * 2)
+        self.run_hook(RUNNER_CLEANUP_TMP_DIR=str(self.runtime),
+                      RUNNER_CLEANUP_DIAG_DIR=str(self.runtime),
+                      RUNNER_CLEANUP_TMP_MINUTES="0",
+                      RUNNER_CLEANUP_DIAG_DAYS="0")
+        self.assertTrue(protected.exists())
+        self.assert_preserved()
+
+    def test_mount_under_workspace_is_not_traversed(self):
+        # Simulate a same-filesystem bind mount with a fake findmnt output.
+        # The cleanup must skip the entire parent rather than chmod it.
+        nested = self.workspace / "mounted" / "bind"
+        file = put(nested / "keep", "mount-data")
+        cmd_dir = self.base / "bin"
+        script = put(cmd_dir / "findmnt",
+                     "#!/usr/bin/env bash\n"
+                     + "printf '%s\\n' " + repr(str(nested)) + "\n")
+        script.chmod(0o755)
+        log = self.run_hook(PATH=str(cmd_dir) + ":" + os.environ["PATH"])
+        self.assertIn("skip mounted path:", log)
+        self.assertTrue(file.exists())
+        self.assert_preserved()
+
     def test_dockerfile_contract(self):
         dockerfile = (PROFILE / "Dockerfile").read_text()
         self.assertIn("COPY --chown=root:root --chmod=0755 scripts/runner-hooks/", dockerfile)
