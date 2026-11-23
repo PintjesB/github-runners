@@ -85,7 +85,7 @@ is_cache_dir() {
         "pip cache:/var/lib/general-runner/cache/pip"|"npm cache:/var/lib/general-runner/cache/npm") return 0 ;;
     esac
     case "$label:$d" in
-        "pip cache:/tmp/"*|"npm cache:/tmp/"*) under_tmp "$d" ;;
+        "pip cache:/tmp/"*"/cache/pip"|"npm cache:/tmp/"*"/cache/npm") under_tmp "$d" ;;
         *) return 1 ;;
     esac
 }
@@ -171,7 +171,7 @@ clean_diag() {
     local d="$1" newest
     case "$d" in
         /var/lib/general-runner/runtime/_diag) ;;
-        /tmp/*) under_tmp "$d" || { log "unsafe _diag $d, skipped"; return 0; } ;;
+        /tmp/*/_diag) under_tmp "$d" || { log "unsafe _diag $d, skipped"; return 0; } ;;
         *) log "unsafe _diag $d, skipped"; return 0 ;;
     esac
     safe_dir "$d" || { log "no runner _diag at $d, skipped"; return 0; }
@@ -187,7 +187,7 @@ clean_tmp() {
     local d="$1"
     case "$d" in
         /tmp) ;;
-        /tmp/*) under_tmp "$d" || { log "unsafe tmp path $d, skipped"; return 0; } ;;
+        /tmp/*/tmp) under_tmp "$d" || { log "unsafe tmp path $d, skipped"; return 0; } ;;
         *) log "unsafe tmp path $d, skipped"; return 0 ;;
     esac
     [ -d "$d" ] && [ ! -L "$d" ] || return 0
