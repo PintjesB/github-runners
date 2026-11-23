@@ -143,6 +143,7 @@ for attempt in 1 2 3 4 5; do
         started=1
         break
     fi
+    log "PostgreSQL start attempt $attempt did not become ready"
 done
 if [ "$started" -ne 1 ]; then
     log "PostgreSQL failed to start after five attempts"
