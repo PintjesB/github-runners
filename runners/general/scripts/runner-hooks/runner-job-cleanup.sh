@@ -82,8 +82,7 @@ is_work_root() {
 is_cache_dir() {
     local label="$1" d="$2"
     case "$label:$d" in
-        "pip cache:/var/lib/general-runner/cache/pip"|
-        "npm cache:/var/lib/general-runner/cache/npm") return 0 ;;
+        "pip cache:/var/lib/general-runner/cache/pip"|"npm cache:/var/lib/general-runner/cache/npm") return 0 ;;
     esac
     case "$label:$d" in
         "pip cache:/tmp/"*|"npm cache:/tmp/"*) under_tmp "$d" ;;
@@ -94,11 +93,13 @@ is_cache_dir() {
 # Catch bind mounts even when they use the same underlying filesystem.
 # Refuse deletion if mount inspection fails; never chmod through a mount.
 has_nested_mount() {
-    local p="$1" mount_path
+    local p="$1" mount_path mounts
     command -v findmnt >/dev/null 2>&1 || return 0
+    mounts="$(findmnt -rn -o TARGET 2>/dev/null)" || return 0
+    [ -n "$mounts" ] || return 0
     while IFS= read -r mount_path; do
         case "$mount_path" in "$p"/*) return 0 ;; esac
-    done < <(findmnt -rn -o TARGET 2>/dev/null)
+    done <<< "$mounts"
     return 1
 }
 
@@ -151,8 +152,13 @@ clean_workspaces() {
         shopt -u nullglob dotglob
         for sub in "${subs[@]}"; do
             if [ -d "$sub" ] && [ ! -L "$sub" ]; then
-                # <repo>/<repo> is the job workspace: keep the directory,
-                # the runner and later steps expect it to exist.
+                # Do not traverse a mounted workspace or nested bind mount,
+                # even when it shares the work volume's underlying device.
+                if mountpoint -q -- "$sub" 2>/dev/null || has_nested_mount "$sub"; then
+                    log "skip mounted workspace: $sub"
+                    continue
+                fi
+                # <repo>/<repo> is the job workspace: keep the directory.
                 clear_contents "$sub"
             else
                 remove_path "$sub"
