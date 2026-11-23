@@ -28,14 +28,26 @@ The image configures the GitHub Actions runner job-started and job-completed
 hooks from /opt/runner-hooks/. No external Compose mount, additional Docker
 socket access, systemd service or workflow changes are necessary.
 
-The completion hook deletes recognized repository workspace contents and aged runner-owned
-temporary/diagnostic files. Pip and npm caches are emptied above 2048 MB each,
-and the tool cache above 3072 MB. The started hook repeats cleanup before the
-next job's checkout to recover after a job is interrupted. Registration,
-credentials, _actions and _temp are never removed by these hooks. Cleanup
-targets are restricted to the general-runner's standard work/cache/runtime
-paths (and /tmp); unknown custom runner layouts are skipped rather than
-risking deletion. Nested bind mounts are also skipped.
+The completion hook removes repository workspace contents and aged runner-owned
+temporary/diagnostic files. On container startup, the image also cleans
+abandoned job data before starting the persistent listener.
+
+Pip and npm caches are **disposable by default** and are emptied after each
+job and before the next. The tool cache is emptied if it exceeds 1024 MB.
+The entrypoint exports RUNNER_WORK_DIR explicitly: cleanup does not depend on
+GitHub providing RUNNER_WORKSPACE.
+
+The job-started hook first cleans and then checks free disk capacity. A job
+is refused if free space is below 15 GiB or free inodes are below 5%
+(RUNNER_CLEANUP_MIN_FREE_GB and RUNNER_CLEANUP_MIN_FREE_INODES_PCT).
+This fails **the assigned job**, not the listener; runner identity, registration,
+volumes and image remain unchanged. Cleanup failures also fail the new job
+instead of silently starting it. Completion cleanup remains best effort.
+These guards do not impose a quota while a job is actively running.
+
+Registration, credentials, _actions and _temp are never removed. Cleanup
+targets are restricted to known work/cache/runtime paths and /tmp; symlinked
+paths and nested bind mounts are protected. Unknown layouts are skipped.
 
 For first deployment, optionally set RUNNER_CLEANUP_DRY_RUN=1 as a Compose
 environment override while runners are idle. Verify both [runner-cleanup:started]
@@ -44,7 +56,11 @@ redeploy while idle to activate deletion, which is the image default.
 RUNNER_CLEANUP_DISABLE=1 disables cleanup if rollback is needed.
 
 The hooks cannot reclaim Docker anonymous PostgreSQL service volumes, images,
-or logs on the host. SIGKILL and host shutdown defer cleanup to the next job.
+or logs on the host. SIGKILL and host shutdown defer cleanup to the next
+container start or job-start hook. No host-wide Docker prune is performed.
+A single job can still exhaust the host by creating Docker service volumes,
+large writable layers or build output before its completion hook runs. Keep
+Checkmk disk alerts and job-scoped Docker service teardown.
 Persistent listeners remain less isolated than one-new-container-per-job;
 cleanup is disk hygiene, not a security boundary. Measure disk usage over
 20 jobs and verify that named volumes and runtime files remain intact.
