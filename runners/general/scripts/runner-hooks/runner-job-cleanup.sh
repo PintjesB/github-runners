@@ -267,13 +267,13 @@ main() {
         case "$ws" in /*) root="${ws%/*}" ;; esac
     fi
     if ! safe_dir "$root" || ! is_work_root "$root"; then
-        log "ERROR: unsafe or missing work root '$root'"
+        log "ERROR: unsafe or missing work root '$root'; nothing cleaned"
         [ "$phase" = started ] && return 75
         return 0
     fi
     if [ -n "${GITHUB_WORKSPACE:-}" ]; then
         case "$GITHUB_WORKSPACE" in "$root"/*) ;; *)
-            log "ERROR: GITHUB_WORKSPACE is outside $root"
+            log "ERROR: GITHUB_WORKSPACE is outside $root, nothing cleaned"
             [ "$phase" = started ] && return 75
             return 0 ;;
         esac
