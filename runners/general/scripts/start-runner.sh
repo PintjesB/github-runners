@@ -38,6 +38,14 @@ install -d -m 0750 -o runner -g runner \
     "$RUNNER_STATE_DIR" "$RUNNER_RUNTIME_DIR" "$RUNNER_WORK_DIR" \
     "$PIP_CACHE_DIR" "$npm_config_cache"
 
+# Stop stale PostgreSQL first. Its data is deliberately outside the normal
+# workspace scrub so a failed stop can never cause live PGDATA to be removed.
+if [ -x /usr/local/bin/runner-ci-postgres ]; then
+    if ! timeout --signal=TERM --kill-after=10s 60s gosu runner /usr/local/bin/runner-ci-postgres stop; then
+        log "WARNING: PostgreSQL startup recovery failed; the pre-job hook will retry"
+    fi
+fi
+
 # Reclaim disposable work/cache volumes before copying runner binaries.
 # This ordering matters if Docker restarted because the filesystem was full.
 # The state volume is never touched, so registration remains persistent.

@@ -301,3 +301,18 @@ or anonymous volumes. Docker cleanup belongs in each workflow's own scoped
 `RUNNER_CLEANUP_DRY_RUN=1` previews deletions and
 `RUNNER_CLEANUP_DISABLE=1` disables cleanup for rollback. Actual job hooks
 must be verified on an idle canary after the image is published.
+
+## On-demand PostgreSQL 17 for CI
+
+The image contains PostgreSQL 17 **server** and client binaries in
+`/usr/lib/postgresql/17/bin`. No system database is created or
+started on container launch. Jobs can initialize a disposable PostgreSQL
+cluster as the unprivileged runner user, bind it to `127.0.0.1` on an
+unoccupied port, and remove its data in an unconditional workflow teardown.
+The `en_US.UTF-8` locale is available for consistent PostgreSQL test setup.
+
+**This is image preparation, not the workflow migration.** Existing GitHub
+Actions `services: postgres` and Docker build workflows continue using
+their present daemon until consumers explicitly migrate. Do not remove
+the host Docker socket from current Compose stacks just because the
+server binaries are now available.
