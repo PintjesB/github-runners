@@ -279,3 +279,18 @@ Both runner profiles install the versioned `titan-evidence` client. See the
 The service requires separately provisioned durable storage, HTTPS and human
 authentication before [Titan Stocks PR #213](https://github.com/PintjesB/titan-stocks/pull/213)
 can pass its required evidence gates. Image installation alone does not deploy storage.
+
+## On-demand PostgreSQL 17 for CI
+
+The image contains PostgreSQL 17 **server** and client binaries in
+`/usr/lib/postgresql/17/bin`. No system database is created or
+started on container launch. Jobs can initialize a disposable PostgreSQL
+cluster as the unprivileged runner user, bind it to `127.0.0.1` on an
+unoccupied port, and remove its data in an unconditional workflow teardown.
+The `en_US.UTF-8` locale is available for consistent PostgreSQL test setup.
+
+**This is image preparation, not the workflow migration.** Existing GitHub
+Actions `services: postgres` and Docker build workflows continue using
+their present daemon until consumers explicitly migrate. Do not remove
+the host Docker socket from current Compose stacks just because the
+server binaries are now available.
