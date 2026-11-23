@@ -231,6 +231,7 @@ probe_gh
 probe_node
 probe_python
 probe_postgres_client
+probe_postgres_server
 require_binary envsubst
 probe_playwright
 probe_host_gateway
