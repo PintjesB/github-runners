@@ -12,6 +12,8 @@ ARG NODE_MAJOR=24
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     RUNNER_ROOT=/opt/actions-runner \
+    PG_MAJOR=16 \
+    PG_BINDIR=/usr/lib/postgresql/16/bin \
     RUNNER_VERSION=$RUNNER_VERSION \
     RUNNER_SHA256_ARM64=$RUNNER_SHA256_ARM64 \
     RUNNER_SHA256_X64=$RUNNER_SHA256_X64
@@ -31,6 +33,19 @@ RUN set -e; \
       shellcheck tini tar unzip wget xz-utils zip \
       python3 python3-pip python3-venv postgresql-client \
  && rm -rf /var/lib/apt/lists/*
+
+# Install PostgreSQL 16 server binaries without configuring or starting a
+# persistent system database. CI consumers create per-job loopback clusters.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends locales postgresql-common; \
+    install -d -m 0755 /etc/postgresql-common/createcluster.d; \
+    echo 'create_main_cluster = false' > /etc/postgresql-common/createcluster.d/ci-no-main.conf; \
+    apt-get install -y --no-install-recommends postgresql-16 postgresql-client-16; \
+    localedef -i en_US -f UTF-8 en_US.UTF-8; \
+    test -x /usr/lib/postgresql/16/bin/initdb; \
+    test ! -d /var/lib/postgresql/16/main; \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Docker client plugins only. No dockerd, containerd or host socket.
 RUN install -d -m 0755 /etc/apt/keyrings \
