@@ -73,7 +73,9 @@ ENV LANG=C.UTF-8 \
     NODE_MAJOR=24 \
     # The runner binaries live in this image-owned directory. The
     # container entrypoint does not need to redownload them.
-    RUNNER_ROOT=/opt/actions-runner
+    RUNNER_ROOT=/opt/actions-runner \
+    PG_MAJOR=17 \
+    PG_BINDIR=/usr/lib/postgresql/17/bin
 
 # Refresh the base image's package index, install the documented
 # CI toolchain, and create the non-root ``runner`` user. The
@@ -156,6 +158,23 @@ RUN set -e; \
         libxkbcommon0 \
         libxrandr2 \
  && rm -rf /var/lib/apt/lists/*
+
+# PostgreSQL 17 server binaries match Titan's current postgres:17 CI services.
+# No cluster is configured at image build, and no service runs in the listener.
+# Existing Docker-dependent Playwright/build jobs remain unchanged for now.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends locales postgresql-common; \
+    install -d -m 0755 /etc/postgresql-common/createcluster.d /usr/share/postgresql-common/pgdg; \
+    echo 'create_main_cluster = false' > /etc/postgresql-common/createcluster.d/ci-no-main.conf; \
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc; \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-17 postgresql-client-17; \
+    localedef -i en_US -f UTF-8 en_US.UTF-8; \
+    test -x /usr/lib/postgresql/17/bin/initdb; \
+    test ! -d /var/lib/postgresql/17/main; \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 24.x via NodeSource. The ``setup-node`` action in
 # the workflow reuses the same ``.nvmrc`` (24.18.0); the system
