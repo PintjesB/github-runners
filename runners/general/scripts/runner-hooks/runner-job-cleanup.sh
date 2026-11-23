@@ -14,7 +14,7 @@
 # host restart) is cleaned up before the next job uses the runner.
 #
 # What it removes (only below paths the runner itself reports or the image
-# configures; never through a symlink, never across a mount point):
+# configures; not through symlinks; direct and nested mount points are skipped):
 #   * contents of every repository workspace under the work root
 #     (checkout, .venv*, node_modules, build output); the directories stay;
 #   * runner _diag logs older than RUNNER_CLEANUP_DIAG_DAYS (the newest
@@ -62,6 +62,46 @@ safe_dir() {
     return 0
 }
 
+# Workflow env must not redirect cleanup into credentials, _actions, _temp,
+# HOME or other persistent directories. Permit known image paths and /tmp
+# fixture paths only. Canonicalize /tmp paths to reject symlinked parents.
+under_tmp() {
+    local resolved
+    resolved="$(realpath -e -- "$1" 2>/dev/null)" || return 1
+    case "$resolved" in /tmp/?*) return 0 ;; *) return 1 ;; esac
+}
+
+is_work_root() {
+    case "$1" in
+        /var/lib/general-runner/work|/var/lib/oportunist-runner/work) return 0 ;;
+        /tmp/*) under_tmp "$1" ;;
+        *) return 1 ;;
+    esac
+}
+
+is_cache_dir() {
+    local label="$1" d="$2"
+    case "$label:$d" in
+        "pip cache:/var/lib/general-runner/cache/pip"|
+        "npm cache:/var/lib/general-runner/cache/npm") return 0 ;;
+    esac
+    case "$label:$d" in
+        "pip cache:/tmp/"*|"npm cache:/tmp/"*) under_tmp "$d" ;;
+        *) return 1 ;;
+    esac
+}
+
+# Catch bind mounts even when they use the same underlying filesystem.
+# Refuse deletion if mount inspection fails; never chmod through a mount.
+has_nested_mount() {
+    local p="$1" mount_path
+    command -v findmnt >/dev/null 2>&1 || return 0
+    while IFS= read -r mount_path; do
+        case "$mount_path" in "$p"/*) return 0 ;; esac
+    done < <(findmnt -rn -o TARGET 2>/dev/null)
+    return 1
+}
+
 size_mb() { du -sm -x -- "$1" 2>/dev/null | awk '{s=$1} END {print s+0}'; }
 avail_mb() { df -Pm -- "$1" 2>/dev/null | awk 'NR==2 {print $4+0}'; }
 
@@ -69,8 +109,8 @@ avail_mb() { df -Pm -- "$1" 2>/dev/null | awk 'NR==2 {print $4+0}'; }
 # skipped. Read-only directories left by a job are made writable first.
 remove_path() {
     local p="$1"
-    if [ ! -L "$p" ] && mountpoint -q -- "$p" 2>/dev/null; then
-        log "skip mount point: $p"
+    if [ ! -L "$p" ] && { mountpoint -q -- "$p" 2>/dev/null || { [ -d "$p" ] && has_nested_mount "$p"; }; }; then
+        log "skip mounted path: $p"
         return 0
     fi
     removed=$((removed + 1))
@@ -123,6 +163,11 @@ clean_workspaces() {
 
 clean_diag() {
     local d="$1" newest
+    case "$d" in
+        /var/lib/general-runner/runtime/_diag) ;;
+        /tmp/*) under_tmp "$d" || { log "unsafe _diag $d, skipped"; return 0; } ;;
+        *) log "unsafe _diag $d, skipped"; return 0 ;;
+    esac
     safe_dir "$d" || { log "no runner _diag at $d, skipped"; return 0; }
     is_uint "$diag_days" || diag_days=3
     newest="$(ls -1t -- "$d"/Runner_*.log 2>/dev/null | head -n 1)"
@@ -134,6 +179,11 @@ clean_diag() {
 
 clean_tmp() {
     local d="$1"
+    case "$d" in
+        /tmp) ;;
+        /tmp/*) under_tmp "$d" || { log "unsafe tmp path $d, skipped"; return 0; } ;;
+        *) log "unsafe tmp path $d, skipped"; return 0 ;;
+    esac
     [ -d "$d" ] && [ ! -L "$d" ] || return 0
     is_uint "$tmp_minutes" || tmp_minutes=360
     while IFS= read -r -d '' f; do
@@ -145,6 +195,10 @@ clean_tmp() {
 cap_dir() {
     local label="$1" d="$2" max="$3" size
     [ -n "$d" ] || return 0
+    if [ "$label" != "tool cache" ] && ! is_cache_dir "$label" "$d"; then
+        log "$label: unsafe location $d, skipped"
+        return 0
+    fi
     safe_dir "$d" || { log "$label: $d missing or not ours, skipped"; return 0; }
     is_uint "$max" || { log "$label: invalid cap '$max', skipped"; return 0; }
     size="$(size_mb "$d")"
@@ -167,7 +221,7 @@ main() {
     root="${ws%/*}"
     # The work root must be a real directory of ours that the runner has
     # set up (it always creates _temp there). Anything else: do nothing.
-    if ! safe_dir "$root" || [ ! -d "$root/_temp" ]; then
+    if ! safe_dir "$root" || ! is_work_root "$root" || [ ! -d "$root/_temp" ]; then
         log "work root '$root' does not look like a runner work directory, nothing cleaned"
         return 0
     fi
@@ -188,7 +242,7 @@ main() {
     cap_dir "pip cache" "${PIP_CACHE_DIR:-}" "$cache_max_mb"
     cap_dir "npm cache" "${npm_config_cache:-${NPM_CONFIG_CACHE:-}}" "$cache_max_mb"
     tool="${RUNNER_TOOL_CACHE:-$root/_tool}"
-    case "$tool" in "$root"/*) cap_dir "tool cache" "$tool" "$toolcache_max_mb" ;;
+    case "$tool" in "$root/_tool") cap_dir "tool cache" "$tool" "$toolcache_max_mb" ;;
         *) log "tool cache $tool is outside the work root, skipped" ;; esac
 
     after="$(avail_mb "$root")"
