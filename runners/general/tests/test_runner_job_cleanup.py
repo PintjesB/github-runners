@@ -139,7 +139,10 @@ class JobCleanupTests(unittest.TestCase):
         artifact = put(self.workspace / "stale")
         env = dict(self.env, RUNNER_WORKSPACE="",
                    GITHUB_WORKSPACE="", RUNNER_WORK_DIR=str(self.work))
+        temp_file = self.work / "_temp" / "command"
+        temp_file.unlink()
         (self.work / "_temp").rmdir()
+        self.important.remove(temp_file)
         result = subprocess.run(
             [*SHELL, str(HOOKS / "runner-job-cleanup.sh"), "startup"],
             env=env, capture_output=True, text=True, timeout=30)
