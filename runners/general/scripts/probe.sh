@@ -10,7 +10,7 @@ case "$(uname -m)" in
 esac
 [ "$actual_arch" = "$EXPECTED_ARCH" ] || { echo "architecture mismatch" >&2; exit 1; }
 
-for bin in bash curl git jq gh docker shellcheck node npm python3 psql; do
+for bin in bash curl git jq gh docker shellcheck node npm python3 psql mountpoint findmnt; do
     command -v "$bin" >/dev/null || { echo "missing $bin" >&2; exit 1; }
 done
 # Verify lifecycle hook configuration and files in the built image.
