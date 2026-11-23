@@ -279,3 +279,25 @@ Both runner profiles install the versioned `titan-evidence` client. See the
 The service requires separately provisioned durable storage, HTTPS and human
 authentication before [Titan Stocks PR #213](https://github.com/PintjesB/titan-stocks/pull/213)
 can pass its required evidence gates. Image installation alone does not deploy storage.
+
+## Persistent per-job disk cleanup
+
+This image embeds per-job cleanup without container recreation or re-registration.
+The existing state, work and cache volumes remain mounted across jobs.
+
+On each container startup, before every assigned job and on job completion, the
+runner clears disposable repository checkouts and build outputs, pip/npm caches,
+common runtime-home caches and old temporary files. Downloaded runner tool
+caches above 1 GiB are emptied. Pre-job cleanup refuses new work if cleanup
+is incomplete or filesystem free space is below 15 GiB / free inodes below 5%.
+Cleanup invocations are bounded to five minutes. The browser cache, where
+configured, stays persistent.
+
+**Safety boundary:** Cleanup only touches paths owned by this runner and never
+uses Docker prune or removes host containers, images, networks, BuildKit state,
+or anonymous volumes. Docker cleanup belongs in each workflow's own scoped
+`trap`/teardown logic, especially on hosts running multiple CI jobs.
+
+`RUNNER_CLEANUP_DRY_RUN=1` previews deletions and
+`RUNNER_CLEANUP_DISABLE=1` disables cleanup for rollback. Actual job hooks
+must be verified on an idle canary after the image is published.
