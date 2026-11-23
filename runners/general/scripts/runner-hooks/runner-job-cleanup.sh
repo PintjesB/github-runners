@@ -152,7 +152,12 @@ clean_workspaces() {
     shopt -u nullglob
     for repo in "${repos[@]}"; do
         case "${repo##*/}" in _*) continue ;; esac   # runner-owned: _actions, _temp, _tool, ...
-        [ -d "$repo" ] && [ ! -L "$repo" ] || continue
+        if [ -L "$repo" ]; then
+            log "WARNING: symlinked workspace parent $repo, skipped"
+            [ "$phase" = started ] && failures=$((failures + 1))
+            continue
+        fi
+        [ -d "$repo" ] || continue
         shopt -s nullglob dotglob
         local -a subs=("$repo"/*)
         shopt -u nullglob dotglob
