@@ -138,8 +138,10 @@ opts+=" -c timezone=UTC -c log_timezone=UTC"
 started=0
 for attempt in 1 2 3 4 5; do
     port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+    # pg_ctl forks a daemon. Close the lock fd in the child so postgres
+    # cannot retain our flock after this command exits.
     if "$PG_BIN/pg_ctl" -D "$PGDATA" -w -t 30 -l "$BASE/postgres.log" \
-        -o "$opts -c port=$port" start >/dev/null 2>&1; then
+        -o "$opts -c port=$port" start 9>&- >/dev/null 2>&1; then
         started=1
         break
     fi
