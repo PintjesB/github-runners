@@ -18,6 +18,9 @@ grep -q 'docker-compose-v2' Dockerfile
 grep -q 'docker-buildx' Dockerfile
 grep -q 'python3' Dockerfile
 grep -q 'nodejs' Dockerfile
+# POSIX /bin/sh in Docker RUN must not rely on Bash-only brace expansion.
+! grep -q '/var/lib/oportunist-runner/{state,runtime,work}' Dockerfile
+grep -q '/var/lib/oportunist-runner/state /var/lib/oportunist-runner/runtime' Dockerfile
 grep -q 'lsb-release' Dockerfile
 grep -q 'jq' Dockerfile
 grep -q '(.Ephemeral // false) == false' scripts/register.sh
