@@ -47,7 +47,9 @@ class JobCleanupTests(unittest.TestCase):
                         RUNNER_RUNTIME_DIR=str(self.runtime),
                         RUNNER_CLEANUP_TMP_DIR=str(self.tmp),
                         PIP_CACHE_DIR=str(self.cache / "pip"),
-                        npm_config_cache=str(self.cache / "npm"))
+                        npm_config_cache=str(self.cache / "npm"),
+                        RUNNER_CLEANUP_MIN_FREE_GB="0",
+                        RUNNER_CLEANUP_MIN_FREE_INODES_PCT="0")
 
     def run_hook(self, phase="completed", **overrides):
         result = subprocess.run([*SHELL, str(HOOKS / f"job-{phase}.sh")],
@@ -107,6 +109,43 @@ class JobCleanupTests(unittest.TestCase):
         self.assertIn("pip cache", self.run_hook(RUNNER_CLEANUP_CACHE_MAX_MB="1"))
         self.assertFalse(oversized.exists())
         self.assertTrue(small.exists())
+
+    def test_default_caches_are_disposable(self):
+        pip = put(self.cache / "pip" / "package")
+        npm = put(self.cache / "npm" / "package")
+        self.run_hook()
+        self.assertFalse(pip.exists())
+        self.assertFalse(npm.exists())
+        self.assert_preserved()
+
+    def test_exported_work_root_works_without_runner_workspace(self):
+        artifact = put(self.workspace / "node_modules" / "package")
+        self.run_hook(RUNNER_WORKSPACE="", RUNNER_WORK_DIR=str(self.work))
+        self.assertFalse(artifact.exists())
+        self.assert_preserved()
+
+    def test_started_hook_gates_low_disk_without_dropping_state(self):
+        artifact = put(self.workspace / "stale")
+        env = dict(self.env, RUNNER_CLEANUP_MIN_FREE_GB="1024")
+        result = subprocess.run(
+            [*SHELL, str(HOOKS / "job-started.sh")],
+            env=env, capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("insufficient disk space", result.stdout)
+        self.assertFalse(artifact.exists())
+        self.assert_preserved()
+
+    def test_startup_cleanup_does_not_require_job_environment(self):
+        artifact = put(self.workspace / "stale")
+        env = dict(self.env, RUNNER_WORKSPACE="",
+                   GITHUB_WORKSPACE="", RUNNER_WORK_DIR=str(self.work))
+        (self.work / "_temp").rmdir()
+        result = subprocess.run(
+            [*SHELL, str(HOOKS / "runner-job-cleanup.sh"), "startup"],
+            env=env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(artifact.exists())
+        self.assert_preserved()
 
     def test_temp_retention(self):
         old_dir = self.tmp / "old"
