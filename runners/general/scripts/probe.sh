@@ -28,6 +28,15 @@ case "$psql_version" in
     *" 16."*) ;;
     *) echo "unexpected PostgreSQL client version: $psql_version" >&2; exit 1 ;;
 esac
+# The server is packaged for per-job tests, with no persistent main cluster.
+[ "${PG_MAJOR:-}" = 16 ] || { echo "expected PostgreSQL server major 16" >&2; exit 1; }
+[ "${PG_BINDIR:-}" = /usr/lib/postgresql/16/bin ] || exit 1
+for binary in initdb pg_ctl postgres; do
+    [ -x "$PG_BINDIR/$binary" ] || { echo "missing PostgreSQL server binary: $binary" >&2; exit 1; }
+done
+case "$("$PG_BINDIR/postgres" --version)" in *" 16."*) ;; *) echo "PostgreSQL server version mismatch" >&2; exit 1 ;; esac
+[ ! -e /var/lib/postgresql/16/main ] || { echo "unexpected default PostgreSQL cluster" >&2; exit 1; }
+
 # Verify the actual installed binary, not just Dockerfile source or a tag.
 # The 1.0.0 published image was still built with Runner 2.336.0 even after
 # the source was upgraded. Reject a stale or mismatched binary at CI build time.
