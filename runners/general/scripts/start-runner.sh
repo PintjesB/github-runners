@@ -53,7 +53,9 @@ chmod 0600 "$RUNNER_RUNTIME_DIR"/.credentials* 2>/dev/null || true
 # Clear stale job-owned data on container restart even when no new job arrives.
 # Registration and credentials are in RUNNER_STATE_DIR, outside these targets.
 log "cleaning disposable job data before listener startup"
-gosu runner bash /opt/runner-hooks/runner-job-cleanup.sh startup || true
+if ! timeout --signal=TERM --kill-after=10s 300s gosu runner bash /opt/runner-hooks/runner-job-cleanup.sh startup; then
+    log "WARNING: startup cleanup failed or timed out; job-started hook will retry and gate new jobs"
+fi
 
 log "launching persistent listener"
 exec env HOME="$RUNNER_RUNTIME_DIR" \
