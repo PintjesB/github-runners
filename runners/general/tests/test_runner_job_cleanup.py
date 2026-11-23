@@ -261,6 +261,27 @@ class JobCleanupTests(unittest.TestCase):
         self.assertIn("refusing new job", result.stdout)
         self.assert_preserved()
 
+    def test_started_hook_rejects_unmeasurable_cache(self):
+        cmd_dir = self.base / "bin"
+        script = put(cmd_dir / "du", "#!/usr/bin/env bash\nexit 1\n")
+        script.chmod(0o755)
+        env = dict(self.env, PATH=str(cmd_dir) + ":" + os.environ["PATH"])
+        result = subprocess.run(
+            [*SHELL, str(HOOKS / "job-started.sh")],
+            env=env, capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unable to measure", result.stdout)
+        self.assertIn("refusing new job", result.stdout)
+        self.assert_preserved()
+
+    def test_hooks_have_bounded_execution(self):
+        started = (HOOKS / "job-started.sh").read_text()
+        completed = (HOOKS / "job-completed.sh").read_text()
+        startup = (PROFILE / "scripts" / "start-runner.sh").read_text()
+        for script in (started, completed, startup):
+            self.assertIn("timeout --signal=TERM --kill-after=10s 300s", script)
+        self.assertIn("exit 0", completed)
+
     def test_dockerfile_contract(self):
         dockerfile = (PROFILE / "Dockerfile").read_text()
         self.assertIn("COPY --chown=root:root --chmod=0755 scripts/runner-hooks/", dockerfile)
