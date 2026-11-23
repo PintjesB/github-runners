@@ -28,11 +28,14 @@ The image configures the GitHub Actions runner job-started and job-completed
 hooks from /opt/runner-hooks/. No external Compose mount, additional Docker
 socket access, systemd service or workflow changes are necessary.
 
-The completion hook deletes repository workspace contents and aged runner-owned
+The completion hook deletes recognized repository workspace contents and aged runner-owned
 temporary/diagnostic files. Pip and npm caches are emptied above 2048 MB each,
 and the tool cache above 3072 MB. The started hook repeats cleanup before the
 next job's checkout to recover after a job is interrupted. Registration,
-credentials, _actions and _temp are never removed by these hooks.
+credentials, _actions and _temp are never removed by these hooks. Cleanup
+targets are restricted to the general-runner's standard work/cache/runtime
+paths (and /tmp); unknown custom runner layouts are skipped rather than
+risking deletion. Nested bind mounts are also skipped.
 
 For first deployment, optionally set RUNNER_CLEANUP_DRY_RUN=1 as a Compose
 environment override while runners are idle. Verify both [runner-cleanup:started]
