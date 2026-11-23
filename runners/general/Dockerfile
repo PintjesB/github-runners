@@ -91,6 +91,10 @@ COPY --chown=root:root scripts/start-runner.sh /usr/local/bin/start-runner
 COPY --chown=root:root scripts/probe.sh /usr/local/bin/probe
 RUN chmod 0755 /usr/local/bin/register /usr/local/bin/start-runner /usr/local/bin/probe
 
+# On-demand, disposable PostgreSQL 16 cluster lifecycle. The persistent
+# listener never starts PostgreSQL unless a workflow explicitly requests it.
+COPY --chown=root:root --chmod=0755 scripts/runner-ci-postgres.sh /usr/local/bin/runner-ci-postgres
+
 # Use the built-in runner lifecycle hooks without an external script mount.
 COPY --chown=root:root --chmod=0755 scripts/runner-hooks/ /opt/runner-hooks/
 ENV ACTIONS_RUNNER_HOOK_JOB_STARTED=/opt/runner-hooks/job-started.sh \
