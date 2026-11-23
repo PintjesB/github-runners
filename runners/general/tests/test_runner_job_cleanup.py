@@ -168,7 +168,7 @@ class JobCleanupTests(unittest.TestCase):
                      + "printf '%s\\n' " + repr(str(nested)) + "\n")
         script.chmod(0o755)
         log = self.run_hook(PATH=str(cmd_dir) + ":" + os.environ["PATH"])
-        self.assertIn("skip mounted path:", log)
+        self.assertIn("skip mounted workspace:", log)
         self.assertTrue(file.exists())
         self.assert_preserved()
 
