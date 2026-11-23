@@ -144,6 +144,18 @@ probe_postgres_client() {
     ok "psql: $version"
 }
 
+probe_postgres_server() {
+    [ "${PG_MAJOR:-}" = 17 ] || fail "PostgreSQL server PG_MAJOR must be 17"
+    [ "${PG_BINDIR:-}" = /usr/lib/postgresql/17/bin ] || fail "PostgreSQL 17 binary directory missing"
+    local binary
+    for binary in initdb postgres pg_ctl; do
+        [ -x "$PG_BINDIR/$binary" ] || fail "PostgreSQL 17 server binary missing: $binary"
+    done
+    case "$("$PG_BINDIR/postgres" --version)" in *" 17."*) ;; *) fail "PostgreSQL 17 server version mismatch" ;; esac
+    [ ! -e /var/lib/postgresql/17/main ] || fail "unexpected persistent PostgreSQL 17 main cluster"
+    ok "PostgreSQL 17 server available on demand; no persistent cluster"
+}
+
 probe_playwright() {
     local cache="${PLAYWRIGHT_BROWSERS_PATH:-/home/runner/.cache/ms-playwright}"
     [ -d "$cache" ] || fail "playwright cache missing: $cache"
