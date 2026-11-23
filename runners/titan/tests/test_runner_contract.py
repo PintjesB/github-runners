@@ -380,7 +380,7 @@ def test_start_runner_invokes_run_sh_with_no_runtime_flags() -> None:
     text = _read(START_RUNNER_SCRIPT)
     # The final ``gosu runner run.sh`` invocation is the only listener
     # launch; it must not include the listener-side flags.
-    exec_call = text.split("gosu runner", 1)[1].split("fi", 1)[0]
+    exec_call = text.rsplit("gosu runner", 1)[1].split("fi", 1)[0]
     assert "--start" not in exec_call, (
         "start-runner.sh must NOT pass --start to run.sh"
     )

@@ -124,4 +124,6 @@ check "evidence client installed" /usr/local/bin/titan-evidence --help
 if [ -n "${TITAN_EVIDENCE_BASE_URL:-}${TITAN_EVIDENCE_AUDIENCE:-}" ]; then
     check "evidence routing configuration" /usr/local/bin/titan-evidence --check-config
 fi
-exit 0
+# Scope cleanup to this runner's own work and caches, after capability checks.
+# Never remove Docker objects from the shared host daemon.
+exec timeout --signal=TERM --kill-after=10s 300s bash /opt/runner-hooks/runner-job-cleanup.sh started
