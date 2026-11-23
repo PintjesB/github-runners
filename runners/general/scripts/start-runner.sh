@@ -38,6 +38,14 @@ install -d -m 0750 -o runner -g runner \
     "$RUNNER_STATE_DIR" "$RUNNER_RUNTIME_DIR" "$RUNNER_WORK_DIR" \
     "$PIP_CACHE_DIR" "$npm_config_cache"
 
+# Reclaim disposable work/cache volumes before copying runner binaries.
+# This ordering matters if Docker restarted because the filesystem was full.
+# The state volume is never touched, so registration remains persistent.
+log "cleaning disposable job data before runner-runtime initialization"
+if ! timeout --signal=TERM --kill-after=10s 300s gosu runner bash /opt/runner-hooks/runner-job-cleanup.sh startup; then
+    log "WARNING: startup cleanup failed or timed out; job-started hook will retry and gate new jobs"
+fi
+
 rm -rf "$RUNNER_RUNTIME_DIR"
 mkdir -p "$RUNNER_RUNTIME_DIR"
 cp -a "$RUNNER_ROOT/." "$RUNNER_RUNTIME_DIR/"
@@ -49,13 +57,6 @@ fi
 chown -R runner:runner "$RUNNER_RUNTIME_DIR"
 chmod 0640 "$RUNNER_RUNTIME_DIR/.runner"
 chmod 0600 "$RUNNER_RUNTIME_DIR"/.credentials* 2>/dev/null || true
-
-# Clear stale job-owned data on container restart even when no new job arrives.
-# Registration and credentials are in RUNNER_STATE_DIR, outside these targets.
-log "cleaning disposable job data before listener startup"
-if ! timeout --signal=TERM --kill-after=10s 300s gosu runner bash /opt/runner-hooks/runner-job-cleanup.sh startup; then
-    log "WARNING: startup cleanup failed or timed out; job-started hook will retry and gate new jobs"
-fi
 
 log "launching persistent listener"
 exec env HOME="$RUNNER_RUNTIME_DIR" \
