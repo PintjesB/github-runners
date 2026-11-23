@@ -41,6 +41,8 @@ class PostgresRunnerTests(unittest.TestCase):
         self.assertIn("start|stop|status", SCRIPT)
         self.assertIn('stop_locked', SCRIPT)
         self.assertIn("flock -x 9", SCRIPT)
+        # The forked PostgreSQL daemon must not inherit the held flock FD.
+        self.assertIn("start 9>&-", SCRIPT)
         self.assertIn("realpath -e", SCRIPT)
         self.assertIn("check_mounts", SCRIPT)
         self.assertIn("rm -rf --one-file-system --", SCRIPT)
