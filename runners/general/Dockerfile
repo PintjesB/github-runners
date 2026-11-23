@@ -78,7 +78,9 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 RUN groupadd --system --gid 1001 runner \
  && useradd --system --uid 1001 --gid 1001 \
       --home-dir /home/runner --shell /bin/bash runner \
- && mkdir -p /home/runner /var/lib/general-runner/{state,runtime,work,cache} \
+ && mkdir -p /home/runner \
+      /var/lib/general-runner/state /var/lib/general-runner/runtime \
+      /var/lib/general-runner/work /var/lib/general-runner/cache \
  && chown -R runner:runner /home/runner /var/lib/general-runner
 
 COPY --chown=root:root scripts/fetch-runner.sh /usr/local/bin/fetch-runner
