@@ -78,3 +78,18 @@ job's `Set up runner` and `Complete runner` hook log steps on one updated
 listener, then run another job on that same listener without re-registering.
 Confirm `docker volume inspect`, free bytes and the runner's unchanged ID
 before extending the rollout.
+
+## On-demand PostgreSQL 16 for CI
+
+The image contains PostgreSQL 16 **server** and client binaries in
+`/usr/lib/postgresql/16/bin`. No system database is created or
+started on container launch. Jobs can initialize a disposable PostgreSQL
+cluster as the unprivileged runner user, bind it to `127.0.0.1` on an
+unoccupied port, and remove its data in an unconditional workflow teardown.
+The `en_US.UTF-8` locale is available for consistent PostgreSQL test setup.
+
+**This is image preparation, not the workflow migration.** Existing GitHub
+Actions `services: postgres` and Docker build workflows continue using
+their present daemon until consumers explicitly migrate. Do not remove
+the host Docker socket from current Compose stacks just because the
+server binaries are now available.
