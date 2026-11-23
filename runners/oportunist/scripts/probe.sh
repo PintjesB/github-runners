@@ -8,6 +8,16 @@ fail() { printf '  FAIL %s\n' "$*" >&2; exit 1; }
 
 titan-evidence --help >/dev/null
 
+# Docker RUN uses /bin/sh, not Bash. Catch brace-expansion mistakes that
+# silently fail to create the state/runtime/work directories in the image.
+for path in /var/lib/oportunist-runner/state \
+            /var/lib/oportunist-runner/runtime \
+            /var/lib/oportunist-runner/work; do
+    [ -d "$path" ] || fail "persistent runner directory absent: $path"
+    [ "$(stat -c %u "$path")" -eq 1001 ] || fail "runner directory not owned by uid 1001: $path"
+done
+ok "persistent runner directory layout"
+
 for binary in docker gh git bash node npm python3 lsb_release; do
     command -v "$binary" >/dev/null 2>&1 || fail "missing binary: $binary"
     ok "binary: $binary"
