@@ -12,7 +12,7 @@ RUNNER_WORK_DIR="${RUNNER_WORK_DIR:-/var/lib/general-runner/work}"
 RUNNER_ROOT="${RUNNER_ROOT:-/opt/actions-runner}"
 PIP_CACHE_DIR="${PIP_CACHE_DIR:-/var/lib/general-runner/cache/pip}"
 npm_config_cache="${npm_config_cache:-/var/lib/general-runner/cache/npm}"
-export PIP_CACHE_DIR npm_config_cache
+export PIP_CACHE_DIR npm_config_cache RUNNER_WORK_DIR RUNNER_RUNTIME_DIR
 DOCKER_SOCKET="${DOCKER_SOCKET:-/var/run/docker.sock}"
 
 trap 'unset RUNNER_TOKEN || true' EXIT HUP INT TERM
@@ -37,6 +37,14 @@ fi
 install -d -m 0750 -o runner -g runner \
     "$RUNNER_STATE_DIR" "$RUNNER_RUNTIME_DIR" "$RUNNER_WORK_DIR" \
     "$PIP_CACHE_DIR" "$npm_config_cache"
+
+# Reclaim disposable work/cache volumes before copying runner binaries.
+# This ordering matters if Docker restarted because the filesystem was full.
+# The state volume is never touched, so registration remains persistent.
+log "cleaning disposable job data before runner-runtime initialization"
+if ! timeout --signal=TERM --kill-after=10s 300s gosu runner bash /opt/runner-hooks/runner-job-cleanup.sh startup; then
+    log "WARNING: startup cleanup failed or timed out; job-started hook will retry and gate new jobs"
+fi
 
 rm -rf "$RUNNER_RUNTIME_DIR"
 mkdir -p "$RUNNER_RUNTIME_DIR"

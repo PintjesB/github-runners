@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-for script in scripts/*.sh; do
+for script in scripts/*.sh scripts/runner-hooks/*.sh; do
     bash -n "$script"
     shellcheck -S warning "$script"
 done
@@ -11,4 +11,4 @@ grep -q 'python3-pip python3-venv postgresql-client' Dockerfile
 ! grep -Eq '(@openai/codex|CODEX_VERSION|playwright)' Dockerfile
 ! grep -q '/var/run/docker.sock' docker-compose.yml
 grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' VERSION
-python3 -m unittest discover -s tests -p 'test_sync_upstream.py' -v
+python3 -m unittest discover -s tests -p 'test_*.py' -v

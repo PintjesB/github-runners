@@ -76,6 +76,11 @@ COPY --chown=root:root scripts/start-runner.sh /usr/local/bin/start-runner
 COPY --chown=root:root scripts/probe.sh /usr/local/bin/probe
 RUN chmod 0755 /usr/local/bin/register /usr/local/bin/start-runner /usr/local/bin/probe
 
+# Use the built-in runner lifecycle hooks without an external script mount.
+COPY --chown=root:root --chmod=0755 scripts/runner-hooks/ /opt/runner-hooks/
+ENV ACTIONS_RUNNER_HOOK_JOB_STARTED=/opt/runner-hooks/job-started.sh \
+    ACTIONS_RUNNER_HOOK_JOB_COMPLETED=/opt/runner-hooks/job-completed.sh
+
 LABEL org.opencontainers.image.title="general-runner" \
       org.opencontainers.image.description="Daemonless general-purpose GitHub Actions CI runner" \
       org.opencontainers.image.vendor="PintjesB"
