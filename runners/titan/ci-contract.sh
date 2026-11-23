@@ -12,6 +12,7 @@ done < <(find . -path './tests/__pycache__' -prune -o -type f -name '*.sh' -prin
 grep -q 'lsb-release' Dockerfile
 
 bash tests/test_runner_scripts.sh
+python3 -m unittest discover -s tests -p test_runner_job_cleanup.py -v
 python3 tests/test_dependency_cache.py
 python3 tests/test_browser_cache.py
 
