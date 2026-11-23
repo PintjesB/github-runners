@@ -37,6 +37,22 @@ done
 case "$("$PG_BINDIR/postgres" --version)" in *" 16."*) ;; *) echo "PostgreSQL server version mismatch" >&2; exit 1 ;; esac
 [ ! -e /var/lib/postgresql/16/main ] || { echo "unexpected default PostgreSQL cluster" >&2; exit 1; }
 
+# Actual native-image smoke: initialize a local PostgreSQL instance as the
+# unprivileged listener user, query it over TCP, then remove all PGDATA.
+[ -x /usr/local/bin/runner-ci-postgres ] || { echo "missing runner-ci-postgres" >&2; exit 1; }
+bash -n /usr/local/bin/runner-ci-postgres
+pg_work=/var/lib/general-runner/work
+[ -d "$pg_work" ] || { echo "missing runner work root" >&2; exit 1; }
+gosu runner /usr/local/bin/runner-ci-postgres start
+pg_result="$(gosu runner bash -c 'source /var/lib/general-runner/work/_ci_postgres/connection.env; /usr/lib/postgresql/16/bin/psql "$CI_POSTGRES_URL" -X -Atqc "select 1"')"
+if [ "$pg_result" != 1 ]; then
+    gosu runner /usr/local/bin/runner-ci-postgres stop || true
+    echo "PostgreSQL SQL smoke failed" >&2
+    exit 1
+fi
+gosu runner /usr/local/bin/runner-ci-postgres stop
+[ ! -e "$pg_work/_ci_postgres" ] || { echo "PostgreSQL PGDATA survived cleanup" >&2; exit 1; }
+
 # Verify the actual installed binary, not just Dockerfile source or a tag.
 # The 1.0.0 published image was still built with Runner 2.336.0 even after
 # the source was upgraded. Reject a stale or mismatched binary at CI build time.
