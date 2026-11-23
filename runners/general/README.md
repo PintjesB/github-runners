@@ -78,3 +78,52 @@ job's `Set up runner` and `Complete runner` hook log steps on one updated
 listener, then run another job on that same listener without re-registering.
 Confirm `docker volume inspect`, free bytes and the runner's unchanged ID
 before extending the rollout.
+
+## On-demand PostgreSQL 16 for CI
+
+The image includes PostgreSQL 16 server/client binaries and the
+`en_US.UTF-8` locale. It does **not** run PostgreSQL by default, create a
+persistent cluster, or require access to a Docker daemon.
+
+A workflow needing PostgreSQL starts a private disposable cluster:
+
+```yaml
+# Remove that job's `services: postgres` block first.
+steps:
+  - uses: actions/checkout@<your-existing-pinned-sha>
+  - name: Start isolated PostgreSQL 16
+    run: runner-ci-postgres start
+  - name: Run database tests
+    run: python -m pytest tests/
+```
+
+`runner-ci-postgres start` creates a new cluster under the runner-owned work
+volume (`_ci_postgres`, outside repository checkout paths), with SCRAM
+password authentication, a random password and port, and TCP listening
+**only** on `127.0.0.1`. It checks the actual server settings. It exports
+`CI_POSTGRES_URL` and `POSTGRES_TEST_URL` for subsequent Actions steps via
+`GITHUB_ENV`; no password is printed. A local shell may source the protected
+`_ci_postgres/connection.env` file. The default database is `ci_test`;
+set `RUNNER_CI_POSTGRES_DB` or `RUNNER_CI_POSTGRES_USER` for test compatibility.
+These settings are evaluated only when `start` is called.
+
+The image's existing lifecycle hooks now also call
+`runner-ci-postgres stop` before each job and after every job, including
+failed jobs. The container startup path does the same after a restart.
+Stop verifies that PostgreSQL is no longer running before deleting its
+cluster. Database cleanup runs even if generic cache cleanup is disabled.
+The listener's persistent registration/state remains untouched. The native
+image probe runs a real start, SQL query and stop on both architectures.
+
+**Consumer migration is still required.** GitHub Actions `services:` always
+uses a Docker daemon, even when PostgreSQL is available in the runner image.
+Remove the service definition and its `job.services.postgres.ports` lookups
+from each consuming workflow and use `POSTGRES_TEST_URL` instead. For
+workflows expecting `DATABASE_URL`, map it explicitly to this job-specific
+test URL. Jobs that build or run *other* Docker containers still need their
+existing Docker execution environment.
+
+Only remove `/var/run/docker.sock` from a runner's Compose service after
+**all** jobs scheduled on that runner have been verified to run without
+GitHub service containers, job containers, Docker builds or direct daemon
+commands. Publishing this image alone does not remove that socket.
