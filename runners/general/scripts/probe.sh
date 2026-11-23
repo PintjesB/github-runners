@@ -43,15 +43,23 @@ case "$("$PG_BINDIR/postgres" --version)" in *" 16."*) ;; *) echo "PostgreSQL se
 bash -n /usr/local/bin/runner-ci-postgres
 pg_work=/var/lib/general-runner/work
 [ -d "$pg_work" ] || { echo "missing runner work root" >&2; exit 1; }
-gosu runner /usr/local/bin/runner-ci-postgres start
-pg_result="$(gosu runner bash -c 'source /var/lib/general-runner/work/_ci_postgres/connection.env; /usr/lib/postgresql/16/bin/psql "$CI_POSTGRES_URL" -X -Atqc "select 1"')"
-if [ "$pg_result" != 1 ]; then
-    gosu runner /usr/local/bin/runner-ci-postgres stop || true
-    echo "PostgreSQL SQL smoke failed" >&2
-    exit 1
-fi
+# Simulate GitHub's per-step environment file and two consecutive jobs on
+# one persistent listener. The second start must clean the first PGDATA.
+pg_env="$(gosu runner mktemp /tmp/runner-ci-postgres-env.XXXXXX)"
+trap 'gosu runner /usr/local/bin/runner-ci-postgres stop || true; rm -f "$pg_env"' EXIT
+for job in 1 2; do
+    GITHUB_ENV="$pg_env" gosu runner /usr/local/bin/runner-ci-postgres start
+    gosu runner /usr/local/bin/runner-ci-postgres status
+    pg_result="$(gosu runner bash -c 'source /var/lib/general-runner/work/_ci_postgres/connection.env; /usr/lib/postgresql/16/bin/psql "$CI_POSTGRES_URL" -X -Atqc "select 1"')"
+    [ "$pg_result" = 1 ] || { echo "PostgreSQL SQL smoke failed on job $job" >&2; exit 1; }
+    grep -q '^POSTGRES_TEST_URL=postgresql://ci:' "$pg_env" ||
+        { echo "GITHUB_ENV did not receive PostgreSQL connection URL" >&2; exit 1; }
+done
+gosu runner /usr/local/bin/runner-ci-postgres stop
 gosu runner /usr/local/bin/runner-ci-postgres stop
 [ ! -e "$pg_work/_ci_postgres" ] || { echo "PostgreSQL PGDATA survived cleanup" >&2; exit 1; }
+rm -f "$pg_env"
+trap - EXIT
 
 # Verify the actual installed binary, not just Dockerfile source or a tag.
 # The 1.0.0 published image was still built with Runner 2.336.0 even after
