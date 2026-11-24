@@ -49,6 +49,8 @@ python3 -m venv "$venv_root/venv" || fail "python venv creation failed"
 "$venv_root/venv/bin/python" -m pip --version >/dev/null 2>&1 || fail "pip missing from python venv"
 ok "python venv and pip available"
 
+# Official Linux Node.js binaries since v25 require libatomic at runtime.
+python3 -c 'import ctypes; ctypes.CDLL("libatomic.so.1")'
 node_major="$(node -p 'process.versions.node.split(".")[0]')"
 [ "$node_major" = 24 ] || fail "Node 24 required, got $(node --version)"
 ok "node: $(node --version)"

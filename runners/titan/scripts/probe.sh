@@ -112,6 +112,8 @@ probe_gh() {
 probe_node() {
     require_binary node
     require_binary npm
+    # Official Linux Node.js binaries since v25 require libatomic.
+    python3 -c 'import ctypes; ctypes.CDLL("libatomic.so.1")' || fail "libatomic runtime is missing"
     local major
     major="$(node -e 'console.log(process.versions.node.split(".")[0])')"
     [ "$major" -eq 24 ] || fail "node major version must be 24 (got $major)"

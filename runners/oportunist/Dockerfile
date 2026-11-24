@@ -28,7 +28,7 @@ RUN set -e; \
       apt-get -o APT::Update::Error-Mode=any update; \
     fi; \
     apt-get install -y --no-install-recommends \
-      bash ca-certificates coreutils curl file git gnupg gzip gosu jq lsb-release tini tar unzip wget xz-utils zip \
+      bash ca-certificates coreutils curl file git gnupg gzip gosu jq libatomic1 lsb-release tini tar unzip wget xz-utils zip \
       docker.io docker-compose-v2 docker-buildx \
       python3 python3-pip python3-venv \
  && rm -rf /var/lib/apt/lists/*

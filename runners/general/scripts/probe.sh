@@ -105,6 +105,8 @@ minimum_version=2.338.2
     printf 'refusing deprecated GitHub runner %s (minimum %s)\n' "$installed_version" "$minimum_version" >&2
     exit 1
 }
+# Official Linux Node.js binaries since v25 require libatomic at runtime.
+python3 -c 'import ctypes; ctypes.CDLL("libatomic.so.1")'
 [ "$(node -p 'process.versions.node.split(".")[0]')" = 24 ]
 python3 -c 'import sys; assert sys.version_info >= (3, 12)'
 work="$(mktemp -d)"
