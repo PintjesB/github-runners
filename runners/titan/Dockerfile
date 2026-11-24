@@ -136,6 +136,7 @@ RUN set -e; \
         # the Ubuntu 24.04 requirements documented by the Playwright
         # project; we install them at image build time so workflow
         # jobs never need ``--with-deps`` and never need sudo.
+        libatomic1 \
         libasound2t64 \
         libatk-bridge2.0-0t64 \
         libatk1.0-0t64 \
