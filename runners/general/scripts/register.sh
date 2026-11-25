@@ -9,6 +9,13 @@ fail() { log "ERROR: $*"; exit "${2:-1}"; }
 
 RUNNER_NAME="${RUNNER_NAME:-general-ci-$(hostname)}"
 RUNNER_LABELS="${RUNNER_LABELS:-general-ci}"
+RUNNER_NO_DEFAULT_LABELS="${RUNNER_NO_DEFAULT_LABELS:-false}"
+label_args=()
+case "$RUNNER_NO_DEFAULT_LABELS" in
+    true) label_args+=(--no-default-labels) ;;
+    false) ;;
+    *) fail "RUNNER_NO_DEFAULT_LABELS must be true or false" 2 ;;
+esac
 RUNNER_STATE_DIR="${RUNNER_STATE_DIR:-/var/lib/general-runner/state}"
 RUNNER_RUNTIME_DIR="${RUNNER_RUNTIME_DIR:-/var/lib/general-runner/runtime}"
 RUNNER_WORK_DIR="${RUNNER_WORK_DIR:-/var/lib/general-runner/work}"
@@ -22,11 +29,13 @@ if [ -s "$RUNNER_STATE_DIR/.runner" ] \
     existing_repo="$(sed -n 's/^repo_url=//p' "$RUNNER_STATE_DIR/diagnostics.txt")"
     existing_name="$(sed -n 's/^runner_name=//p' "$RUNNER_STATE_DIR/diagnostics.txt")"
     existing_labels="$(sed -n 's/^runner_labels=//p' "$RUNNER_STATE_DIR/diagnostics.txt")"
+    existing_no_default_labels="$(sed -n 's/^runner_no_default_labels=//p' "$RUNNER_STATE_DIR/diagnostics.txt")"
     if ! jq -e '(.Ephemeral // false) == false' "$RUNNER_STATE_DIR/.runner" >/dev/null 2>&1; then
         [ -n "${RUNNER_TOKEN:-}" ] || fail "persisted runner registration is ephemeral/one-shot; set a fresh GENERAL_RUNNER_TOKEN and recreate the listener once" 2
     elif [ "$existing_repo" = "$REPO_URL" ] \
        && [ "$existing_name" = "$RUNNER_NAME" ] \
-       && [ "$existing_labels" = "$RUNNER_LABELS" ]; then
+       && [ "$existing_labels" = "$RUNNER_LABELS" ] \
+       && [ "${existing_no_default_labels:-false}" = "$RUNNER_NO_DEFAULT_LABELS" ]; then
         log "existing persistent registration matches requested identity"
         exit 0
     fi
@@ -49,6 +58,7 @@ gosu runner env HOME="$RUNNER_RUNTIME_DIR" \
     --token "$RUNNER_TOKEN" \
     --name "$RUNNER_NAME" \
     --labels "$RUNNER_LABELS" \
+    "${label_args[@]}" \
     --work "$RUNNER_WORK_DIR"
 rc=$?
 set -e
@@ -65,6 +75,7 @@ cat > "$RUNNER_STATE_DIR/diagnostics.txt" <<EOF
 repo_url=$REPO_URL
 runner_name=$RUNNER_NAME
 runner_labels=$RUNNER_LABELS
+runner_no_default_labels=$RUNNER_NO_DEFAULT_LABELS
 EOF
 
 chown -R runner:runner "$RUNNER_STATE_DIR"
